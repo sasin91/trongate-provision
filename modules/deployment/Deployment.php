@@ -236,6 +236,10 @@ class Deployment extends Trongate
       exit();
     }
 
+    if (session_status() === PHP_SESSION_ACTIVE) {
+      session_write_close();
+    }
+
     // SSE setup
     header("Content-Type: text/event-stream");
     header("Cache-Control: no-cache");

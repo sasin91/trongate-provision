@@ -459,6 +459,10 @@ class Server extends Trongate
       exit();
     }
 
+    if (session_status() === PHP_SESSION_ACTIVE) {
+      session_write_close();
+    }
+
     header("Content-Type: text/event-stream");
     header("Cache-Control: no-cache");
     header("X-Accel-Buffering: no");
