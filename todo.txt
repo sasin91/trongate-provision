@@ -1,0 +1,2 @@
+1. modules/server/Server.php - extract script views rather than heredoc syntax
+2. modules/server/Server.php - extract certbot to separate action
