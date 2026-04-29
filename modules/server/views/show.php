@@ -27,6 +27,15 @@
       <button type="submit" class="btn btn-secondary" onclick="return confirm('Reboot this Hetzner server?')">&#8635; Reboot</button>
       <?= form_close() ?>
     <?php endif; ?>
+    <?php if ($server->status === "active" && !empty($server->domain)): ?>
+      <?= form_open("server/enable_ssl/" . $server->id, [
+        "style" => "display:inline;margin:0",
+      ]) ?>
+      <button type="submit" class="btn btn-secondary" onclick="return confirm('Run certbot for <?= htmlspecialchars(
+        $server->domain,
+      ) ?>? DNS must already point at this server.')">Enable SSL</button>
+      <?= form_close() ?>
+    <?php endif; ?>
     <a href="deployment/create?server=<?= $server->id ?>" class="btn btn-secondary">+ New Deployment</a>
     <?= form_open("server/delete/" . $server->id, [
       "style" => "display:inline;margin:0",
