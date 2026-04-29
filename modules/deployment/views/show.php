@@ -20,7 +20,7 @@
         <?= form_close() ?>
         <a href="environment-services/create?environment=<?= $deployment->env_id ?>" class="btn btn-secondary">+ Service</a>
         <?php if ($deployment->status !== 'running'): ?>
-            <button id="deploy-btn" class="btn btn-primary" onclick="startDeploy(<?= $deployment->id ?>)">&#9654; Deploy</button>
+            <button id="deploy-btn" class="btn btn-primary" data-stream-url="deployment/stream/<?= $deployment->id ?>" onclick="startDeploy(<?= $deployment->id ?>)">&#9654; Deploy</button>
         <?php endif; ?>
         <?php if ((int)($deployment->is_canary ?? 0) === 1 && $deployment->status === 'success'): ?>
             <?= form_open('deployment/promote_canary/' . $deployment->id, ['style' => 'display:inline;margin:0']) ?>
@@ -149,74 +149,19 @@
     </div>
 </div>
 
-<div id="live-log-panel" style="display:none">
+<div id="live-log-panel" class="log-panel">
     <div class="card">
         <div class="card-header">
             <span class="card-title">Deploying…</span>
             <span id="live-status-badge"></span>
         </div>
-        <div style="padding:0">
-            <pre id="live-log" style="margin:0;padding:1rem 1.25rem;font-size:.78rem;line-height:1.6;overflow-x:auto;overflow-y:auto;max-height:480px;background:#0f172a;color:#e2e8f0;border-radius:0 0 .5rem .5rem"></pre>
+        <div class="flush-card-body">
+            <pre id="live-log" class="terminal-log"></pre>
         </div>
     </div>
 </div>
 
-<script>
-function startDeploy(id) {
-    var btn = document.getElementById('deploy-btn');
-    var panel = document.getElementById('live-log-panel');
-    var log = document.getElementById('live-log');
-    var badge = document.getElementById('live-status-badge');
-
-    btn.disabled = true;
-    btn.textContent = '⏳ Deploying…';
-    log.textContent = '';
-    panel.style.display = '';
-    panel.scrollIntoView({behavior: 'smooth', block: 'start'});
-
-    var es = new EventSource('<?= BASE_URL ?>deployment/stream/' + id);
-
-    es.onmessage = function(e) {
-        log.textContent += e.data + '\n';
-        log.scrollTop = log.scrollHeight;
-    };
-
-    es.addEventListener('done', function(e) {
-        es.close();
-        var result = JSON.parse(e.data);
-        var ok = result.status === 'success';
-
-        panel.querySelector('.card-title').textContent = ok ? 'Deploy complete' : 'Deploy failed';
-
-        badge.innerHTML = ok
-            ? '<span class="badge badge-active">success</span>'
-            : '<span class="badge badge-failed">failed</span>';
-
-        // Update the status badge in the detail grid
-        var statusBadge = document.querySelector('.detail-item .badge[class*="badge-"]');
-        if (statusBadge) {
-            statusBadge.className = 'badge badge-' + (ok ? 'active' : 'failed');
-            statusBadge.textContent = result.status;
-        }
-
-        btn.disabled = false;
-        btn.textContent = '↺ Re-deploy';
-
-        if (ok && result.sha) {
-            log.textContent += '\nSHA: ' + result.sha + '\n';
-            log.scrollTop = log.scrollHeight;
-        }
-    });
-
-    es.onerror = function() {
-        if (es.readyState === EventSource.CLOSED) return;
-        es.close();
-        log.textContent += '\n[connection closed]\n';
-        btn.disabled = false;
-        btn.textContent = '↺ Re-deploy';
-    };
-}
-</script>
+<script src="deployment_module/js/show.js"></script>
 
 <?php if (in_array($deployment->status, ['running', 'success', 'failed'], true)): ?>
 <div class="card">
@@ -234,7 +179,7 @@ function startDeploy(id) {
     </div>
     <div class="card-body" style="padding:0">
         <?php if (!empty($deployment->run_log)): ?>
-            <pre style="margin:0;padding:1rem 1.25rem;font-size:.78rem;line-height:1.6;overflow-x:auto;background:#0f172a;color:#e2e8f0;border-radius:0 0 .5rem .5rem"><?= htmlspecialchars($deployment->run_log) ?></pre>
+            <pre class="terminal-log terminal-log-static"><?= htmlspecialchars($deployment->run_log) ?></pre>
         <?php else: ?>
             <div style="padding:1rem 1.25rem;color:#94a3b8;font-size:.85rem">No output yet.</div>
         <?php endif; ?>
@@ -336,4 +281,3 @@ function startDeploy(id) {
     </div>
 </div>
 <?php endif; ?>
-

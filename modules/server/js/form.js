@@ -14,10 +14,7 @@ function switchTab(tab) {
     });
 
     document.querySelectorAll('.tab-btn').forEach(btn => {
-        const active = btn.dataset.tab === tab;
-        btn.style.color        = active ? '#6366f1' : '#64748b';
-        btn.style.borderBottom = active ? '2px solid #6366f1' : '';
-        btn.style.marginBottom = active ? '-2px' : '';
+        btn.classList.toggle('active', btn.dataset.tab === tab);
     });
 
     syncShared();
@@ -26,24 +23,20 @@ function switchTab(tab) {
 function markSelected(radio) {
     document.querySelectorAll('.type-card').forEach(c => {
         c.classList.remove('selected');
-        c.style.borderColor = '#e2e8f0';
     });
     const card = radio.closest('.type-card');
     if (card) {
         card.classList.add('selected');
-        card.style.borderColor = '#6366f1';
     }
 }
 
 function markImportSelected(radio) {
     document.querySelectorAll('.import-card').forEach(c => {
         c.classList.remove('selected');
-        c.style.borderColor = '#e2e8f0';
     });
     const card = radio.closest('.import-card');
     if (card) {
         card.classList.add('selected');
-        card.style.borderColor = '#6366f1';
     }
     const nameInp = document.getElementById('shared-name');
     if (nameInp && !nameInp.value) {

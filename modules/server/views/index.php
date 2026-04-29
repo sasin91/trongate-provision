@@ -1,7 +1,7 @@
 <div class="page-header">
     <div class="page-header-left">
         <div class="page-title">Servers</div>
-        <div style="font-size:.85rem;color:#64748b;margin-top:.25rem">All registered servers across your environments</div>
+        <div class="page-subtitle">All registered servers across your environments</div>
     </div>
     <a href="server/create" class="btn btn-primary">+ Add Server</a>
 </div>
@@ -32,9 +32,9 @@
                 <tbody>
                     <?php foreach ($servers as $s): ?>
                         <tr>
-                            <td><a href="server/show/<?= $s->id ?>" style="color:#6366f1;font-weight:600;text-decoration:none"><?= htmlspecialchars($s->name) ?></a></td>
+                            <td><a href="server/show/<?= $s->id ?>" class="table-link"><?= htmlspecialchars($s->name) ?></a></td>
                             <td><?= htmlspecialchars($s->env_name) ?></td>
-                            <td><code style="font-size:.85rem"><?= htmlspecialchars($s->ip_address) ?></code></td>
+                            <td><code class="code-sm"><?= htmlspecialchars($s->ip_address) ?></code></td>
                             <td>PHP <?= htmlspecialchars($s->php_version) ?></td>
                             <td><span class="badge badge-<?= htmlspecialchars($s->status) ?>"><?= htmlspecialchars($s->status) ?></span></td>
                             <td><?= (int) $s->deploy_count ?></td>

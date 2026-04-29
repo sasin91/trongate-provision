@@ -16,6 +16,7 @@ class Deployment extends Trongate
       "page_title" => "Deployments",
       "current_email" => $customer->email,
       "deployments" => $this->model->all((int) $customer->id),
+      "additional_includes_top" => ["deployment_module/css/deployment.css"],
     ];
 
     $this->module("templates");
@@ -151,6 +152,7 @@ class Deployment extends Trongate
       "preselected_server" => $preselected_server,
       "preselected_env" => $preselected_env,
       "deploy_scripts" => $deploy_scripts,
+      "additional_includes_top" => ["deployment_module/css/deployment.css"],
     ];
 
     $this->module("templates");
@@ -198,6 +200,7 @@ class Deployment extends Trongate
       "services" => $services,
       "deploy_scripts" => $deploy_scripts,
       "recent_events" => $recent_events,
+      "additional_includes_top" => ["deployment_module/css/deployment.css"],
     ];
 
     $this->module("templates");

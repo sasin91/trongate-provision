@@ -1,0 +1,59 @@
+.server-lock-hint {
+    color: #6366f1;
+    display: none;
+    font-size: .78rem;
+    margin-top: .25rem;
+}
+
+.source-options {
+    display: flex;
+    gap: 1.5rem;
+    margin-top: .25rem;
+}
+
+.source-option,
+.canary-toggle-label {
+    align-items: center;
+    cursor: pointer;
+    display: flex;
+    font-size: .875rem;
+    gap: .4rem;
+}
+
+.canary-toggle-label {
+    font-weight: 500;
+    gap: .5rem;
+    margin-bottom: .35rem;
+}
+
+.canary-toggle-row {
+    border-top: 1px solid #e2e8f0;
+    margin-top: .5rem;
+    padding-top: 1rem;
+}
+
+.flush-card-body {
+    padding: 0;
+}
+
+.log-panel {
+    display: none;
+}
+
+.terminal-log {
+    background: #0f172a;
+    border-radius: 0 0 .5rem .5rem;
+    color: #e2e8f0;
+    font-size: .78rem;
+    line-height: 1.6;
+    margin: 0;
+    max-height: 480px;
+    overflow-x: auto;
+    overflow-y: auto;
+    padding: 1rem 1.25rem;
+}
+
+.terminal-log-static {
+    max-height: none;
+    overflow-y: visible;
+}

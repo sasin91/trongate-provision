@@ -13,7 +13,7 @@
   </div>
   <div class="actions-row">
     <?php if ($server->status !== "active"): ?>
-      <button id="provision-btn" class="btn btn-primary" onclick="startProvision(<?= $server->id ?>)">&#9654; Provision</button>
+      <button id="provision-btn" class="btn btn-primary" data-stream-url="server/stream/<?= $server->id ?>" onclick="startProvision(<?= $server->id ?>)">&#9654; Provision</button>
       <?= form_open("server/mark_active/" . $server->id, [
         "style" => "display:inline;margin:0",
       ]) ?>
@@ -96,27 +96,27 @@
 
 <!-- LAMP Script Editor -->
 <form method="post" action="server/save_lamp_script/<?= $server->id ?>">
-  <div style="display:grid;grid-template-columns:1fr 220px;gap:1.25rem;align-items:start">
+  <div class="script-editor-grid">
     <div class="card">
       <div class="card-header">
         <span class="card-title">LAMP Provisioning Script</span>
-        <div style="display:flex;gap:.5rem">
+        <div class="script-editor-actions">
           <button type="button" onclick="copyScript('lamp-script')" class="btn btn-secondary btn-sm">Copy</button>
           <button type="submit" class="btn btn-primary btn-sm">Save</button>
         </div>
       </div>
-      <div style="padding:0">
+      <div class="flush-card-body">
         <textarea name="body" id="lamp-script" rows="30"
-          style="width:100%;background:#0f172a;color:#7dd3fc;font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;font-size:.8rem;line-height:1.65;padding:1.5rem;border:none;outline:none;resize:vertical;display:block;box-sizing:border-box"><?= htmlspecialchars(
+          class="script-textarea"><?= htmlspecialchars(
             $lamp_script,
           ) ?></textarea>
       </div>
-      <div style="padding:.75rem 1.25rem;border-top:1px solid #e2e8f0;font-size:.8rem;color:#64748b">
+      <div class="script-help">
         Run as root on your server: <code>bash lamp-setup.sh</code> &mdash; then click <strong>Mark as Active</strong> above.
       </div>
     </div>
 
-    <div style="position:sticky;top:4rem;display:flex;flex-direction:column;gap:1rem">
+    <div class="script-sidebar">
       <div class="card">
         <div class="card-header"><span class="card-title">Variables</span></div>
         <div class="card-body" style="padding:.75rem">
@@ -249,65 +249,15 @@
   <?php endif; ?>
 </div>
 
-<div id="provision-log-panel" style="display:none;margin-top:1.25rem">
+<div id="provision-log-panel" class="log-panel">
   <div class="card">
     <div class="card-header">
       <span class="card-title" id="provision-log-title">Provisioning…</span>
       <span id="provision-status-badge"></span>
     </div>
-    <pre id="provision-log" style="margin:0;padding:1rem 1.25rem;font-size:.78rem;line-height:1.6;overflow-x:auto;overflow-y:auto;max-height:480px;background:#0f172a;color:#e2e8f0;border-radius:0 0 .5rem .5rem"></pre>
+    <pre id="provision-log" class="terminal-log"></pre>
   </div>
 </div>
 
-<script>
-function startProvision(id) {
-    var btn   = document.getElementById('provision-btn');
-    var panel = document.getElementById('provision-log-panel');
-    var log   = document.getElementById('provision-log');
-    var title = document.getElementById('provision-log-title');
-    var badge = document.getElementById('provision-status-badge');
-
-    btn.disabled = true;
-    btn.textContent = '⏳ Provisioning…';
-    log.textContent = '';
-    panel.style.display = '';
-    panel.scrollIntoView({behavior: 'smooth', block: 'start'});
-
-    var es = new EventSource('<?= BASE_URL ?>server/stream/' + id);
-
-    es.onmessage = function(e) {
-        log.textContent += e.data + '\n';
-        log.scrollTop = log.scrollHeight;
-    };
-
-    es.addEventListener('done', function(e) {
-        es.close();
-        var result = JSON.parse(e.data);
-        var ok = result.status === 'active';
-
-        title.textContent = ok ? 'Provisioning complete' : 'Provisioning failed';
-        badge.innerHTML   = ok
-            ? '<span class="badge badge-active">active</span>'
-            : '<span class="badge badge-failed">failed</span>';
-
-        var statusBadge = document.querySelector('.detail-item .badge');
-        if (statusBadge) {
-            statusBadge.className   = 'badge badge-' + (ok ? 'active' : 'failed');
-            statusBadge.textContent = result.status;
-        }
-
-        btn.textContent = '↺ Re-provision';
-        btn.disabled    = false;
-    });
-
-    es.onerror = function() {
-        if (es.readyState === EventSource.CLOSED) return;
-        es.close();
-        log.textContent += '\n[connection closed]\n';
-        btn.disabled    = false;
-        btn.textContent = '↺ Re-provision';
-    };
-}
-</script>
-
-<script src="js/script-editor.js"></script>
+<script src="server_module/js/show.js"></script>
+<script src="server_module/js/script-editor.js"></script>

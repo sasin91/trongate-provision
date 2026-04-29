@@ -17,26 +17,26 @@
 <?php endif; ?>
 
 <?php if (empty($environments)): ?>
-    <div class="alert alert-danger">You need to create an <a href="environment/create" style="color:#b91c1c;font-weight:600">environment</a> first.</div>
+    <div class="alert alert-danger">You need to create an <a href="environment/create" class="danger-link">environment</a> first.</div>
 <?php else: ?>
 
 <!-- Tab bar -->
-<div id="server-form-root" style="display:flex;gap:0;border-bottom:2px solid #e2e8f0;margin-bottom:1.5rem">
+<div id="server-form-root" class="server-form-tabs">
     <?php if ($has_hetzner): ?>
-    <button class="tab-btn active" data-tab="hetzner" onclick="switchTab('hetzner')" style="padding:.6rem 1.25rem;font-size:.875rem;font-weight:500;border:none;background:none;cursor:pointer;color:#6366f1;border-bottom:2px solid #6366f1;margin-bottom:-2px">
+    <button class="tab-btn active" data-tab="hetzner" onclick="switchTab('hetzner')">
         &#9729; Hetzner Cloud
     </button>
-    <button class="tab-btn" data-tab="import" onclick="switchTab('import')" style="padding:.6rem 1.25rem;font-size:.875rem;font-weight:500;border:none;background:none;cursor:pointer;color:#64748b">
+    <button class="tab-btn" data-tab="import" onclick="switchTab('import')">
         &#8645; Import Existing
     </button>
     <?php endif; ?>
-    <button class="tab-btn <?= !$has_hetzner ? 'active' : '' ?>" data-tab="manual" onclick="switchTab('manual')" style="padding:.6rem 1.25rem;font-size:.875rem;font-weight:500;border:none;background:none;cursor:pointer;color:<?= !$has_hetzner ? '#6366f1' : '#64748b' ?>;<?= !$has_hetzner ? 'border-bottom:2px solid #6366f1;margin-bottom:-2px' : '' ?>">
+    <button class="tab-btn <?= !$has_hetzner ? 'active' : '' ?>" data-tab="manual" onclick="switchTab('manual')">
         &#9646; Manual / Existing Server
     </button>
 </div>
 
 <!-- Shared: environment + name -->
-<div class="form-wrap" style="max-width:600px">
+<div class="form-wrap form-wrap-wide">
 <div class="form-group" id="shared-fields">
     <label class="form-label">Environment</label>
     <select id="shared-env" class="form-control">
@@ -81,15 +81,15 @@
 
             <div class="form-group">
                 <label class="form-label">Server plan</label>
-                <div id="type-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:.75rem;margin-top:.25rem">
+                <div id="type-grid" class="server-card-grid server-card-grid-sm">
                     <?php foreach ($hetzner_types as $t): ?>
-                        <label class="type-card" style="border:1.5px solid #e2e8f0;border-radius:.5rem;padding:.875rem;cursor:pointer;transition:border-color .15s">
-                            <input type="radio" name="server_type" value="<?= htmlspecialchars($t['id']) ?>" style="display:none" onchange="markSelected(this)">
-                            <div style="font-weight:600;font-size:.875rem;color:#0f172a"><?= htmlspecialchars($t['name']) ?></div>
-                            <div style="font-size:.78rem;color:#64748b;margin-top:.2rem">
+                        <label class="type-card">
+                            <input type="radio" name="server_type" value="<?= htmlspecialchars($t['id']) ?>" onchange="markSelected(this)">
+                            <div class="type-name"><?= htmlspecialchars($t['name']) ?></div>
+                            <div class="type-spec">
                                 <?= $t['vcpus'] ?> vCPU &middot; <?= round($t['memory'] / 1024, 0) ?> GB RAM &middot; <?= $t['disk'] ?> GB disk
                             </div>
-                            <div style="font-size:.85rem;font-weight:600;color:#6366f1;margin-top:.4rem">
+                            <div class="type-price">
                                 &euro;<?= number_format($t['price_monthly'], 2) ?>/mo
                             </div>
                         </label>
@@ -106,7 +106,7 @@
 </div>
 
 <!-- ── Import tab ──────────────────────────────────────────── -->
-<div id="tab-import" class="card" style="display:none">
+<div id="tab-import" class="card is-hidden">
     <div class="card-body">
         <form method="post" action="<?= $form_location ?>" id="form-import">
             <input type="hidden" name="provider" value="hetzner_import">
@@ -114,24 +114,24 @@
             <input type="hidden" name="name"           id="imp-name">
 
             <?php if (empty($hetzner_servers)): ?>
-                <p style="color:#64748b;font-size:.875rem">No untracked servers found in your Hetzner account.</p>
+                <p class="empty-muted">No untracked servers found in your Hetzner account.</p>
             <?php else: ?>
                 <div class="form-group">
                     <label class="form-label">Select an existing Hetzner server</label>
-                    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:.75rem;margin-top:.25rem">
+                    <div class="server-card-grid server-card-grid-md">
                         <?php foreach ($hetzner_servers as $s): ?>
-                            <label class="import-card" style="border:1.5px solid #e2e8f0;border-radius:.5rem;padding:.875rem;cursor:pointer;transition:border-color .15s">
+                            <label class="import-card">
                                 <input type="radio" name="hetzner_id" value="<?= htmlspecialchars($s['id']) ?>"
                                        data-name="<?= htmlspecialchars($s['name']) ?>"
-                                       style="display:none" onchange="markImportSelected(this)">
-                                <div style="font-weight:600;font-size:.875rem;color:#0f172a"><?= htmlspecialchars($s['name']) ?></div>
-                                <div style="font-size:.78rem;color:#64748b;margin-top:.2rem">
+                                       onchange="markImportSelected(this)">
+                                <div class="s-name"><?= htmlspecialchars($s['name']) ?></div>
+                                <div class="s-meta">
                                     <?= htmlspecialchars($s['type']) ?> &middot; <?= htmlspecialchars($s['region']) ?>
                                 </div>
-                                <div style="font-size:.8rem;color:#0f172a;margin-top:.25rem">
-                                    <code style="font-size:.8rem"><?= htmlspecialchars($s['ip']) ?></code>
+                                <div class="server-ip">
+                                    <code><?= htmlspecialchars($s['ip']) ?></code>
                                 </div>
-                                <div style="margin-top:.4rem">
+                                <div class="card-badge-row">
                                     <span class="badge badge-<?= $s['status'] === 'active' ? 'active' : 'pending' ?>"><?= htmlspecialchars($s['status']) ?></span>
                                 </div>
                             </label>
@@ -150,7 +150,7 @@
 <?php endif; ?>
 
 <!-- ── Manual tab ──────────────────────────────────────────── -->
-<div id="tab-manual" class="card" style="<?= $has_hetzner ? 'display:none' : '' ?>">
+<div id="tab-manual" class="card <?= $has_hetzner ? 'is-hidden' : '' ?>">
     <div class="card-body">
         <div class="form-wrap">
             <form method="post" action="<?= $form_location ?>" id="form-manual">
@@ -183,4 +183,4 @@
 </div>
 <?php endif; ?>
 
-<script src="js/server-form.js"></script>
+<script src="server_module/js/form.js"></script>

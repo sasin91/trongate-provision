@@ -17,6 +17,7 @@ class Server extends Trongate
       "page_title" => "Servers",
       "current_email" => $customer->email,
       "servers" => $this->model->all((int) $customer->id),
+      "additional_includes_top" => ["server_module/css/server.css"],
     ];
 
     $this->module("templates");
@@ -78,6 +79,7 @@ class Server extends Trongate
       "hetzner_regions" => $hetzner_regions,
       "hetzner_types" => $hetzner_types,
       "hetzner_servers" => $hetzner_servers,
+      "additional_includes_top" => ["server_module/css/server.css"],
     ];
 
     $this->module("templates");
@@ -329,9 +331,10 @@ class Server extends Trongate
       "lamp_script" => $lamp_script,
       "lamp_scripts" => $lamp_scripts,
       "lamp_vars" => Script_model::LAMP_VARS,
-      "additional_includes_top" => [
-        '<meta refresh="8" content="8;url=server/show/<?= (int) $server->id ?>">',
-      ],
+      "additional_includes_top" => array_filter([
+        "server_module/css/server.css",
+        $server->status === 'pending' ? '<meta http-equiv="refresh" content="8">' : null,
+      ]),
     ];
 
     $this->module("templates");

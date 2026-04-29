@@ -56,21 +56,21 @@
                   </option>
                 <?php endforeach; ?>
               </select>
-              <span id="server-lock-hint" style="display:none;font-size:.78rem;color:#6366f1;margin-top:.25rem"></span>
+              <span id="server-lock-hint" class="server-lock-hint"></span>
             </div>
           </div>
 
           <!-- App source -->
           <div class="form-group">
             <label class="form-label">App source</label>
-            <div style="display:flex;gap:1.5rem;margin-top:.25rem">
-              <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-size:.875rem">
+            <div class="source-options">
+              <label class="source-option">
                 <input type="radio" name="source_type" value="git" id="src-git"
                   <?= (post('source_type', true) ?: 'git') === 'git' ? 'checked' : '' ?>
                   onchange="toggleSource('git')">
                 Git repository
               </label>
-              <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-size:.875rem">
+              <label class="source-option">
                 <input type="radio" name="source_type" value="zip" id="src-zip"
                   <?= post('source_type', true) === 'zip' ? 'checked' : '' ?>
                   onchange="toggleSource('zip')">
@@ -114,8 +114,8 @@
             <span class="form-hint">Leave blank to use Provision's default script. <a href="script/create?type=deploy" style="color:#6366f1">Create a custom script →</a></span>
           </div>
 
-          <div class="form-group" style="border-top:1px solid #e2e8f0;padding-top:1rem;margin-top:.5rem">
-            <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.875rem;font-weight:500;margin-bottom:.35rem">
+          <div class="form-group canary-toggle-row">
+            <label class="canary-toggle-label">
               <input type="checkbox" name="is_canary" value="1" id="canary-check" <?= ($_SERVER['REQUEST_METHOD'] !== 'POST' || post('is_canary')) ? 'checked' : '' ?> onchange="toggleCanary(this.checked)">
               Canary deployment
             </label>
@@ -138,39 +138,4 @@
   </div>
 <?php endif; ?>
 
-<script>
-  function toggleCanary(on) {
-    document.getElementById('canary-weight-group').style.display = on ? '' : 'none';
-  }
-
-  function applyEnvLock(sel) {
-    var opt = sel.options[sel.selectedIndex];
-    var locked = parseInt(opt.dataset.lockedServer || '0', 10);
-    var name = opt.dataset.lockedName || '';
-    var ss = document.getElementById('server-select');
-    var hint = document.getElementById('server-lock-hint');
-
-    if (locked) {
-      for (var i = 0; i < ss.options.length; i++) {
-        if (parseInt(ss.options[i].value, 10) === locked) {
-          ss.selectedIndex = i;
-          break;
-        }
-      }
-      ss.onchange = (event) => {
-        event.preventDefault();
-      }
-      hint.textContent = 'Locked to "' + name + '"';
-      hint.style.display = '';
-    } else {
-      ss.onchange = undefined;
-      hint.style.display = 'none';
-    }
-  }
-
-  document.addEventListener('DOMContentLoaded', function() {
-    var es = document.getElementById('env-select');
-    if (es && es.value) applyEnvLock(es);
-  });
-</script>
-<script src="js/env-form.js"></script>
+<script src="deployment_module/js/create.js"></script>
