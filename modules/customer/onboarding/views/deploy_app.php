@@ -39,11 +39,17 @@
            <strong><?= htmlspecialchars($deployment->server_name) ?></strong>.</p>
     </div>
 
+    <?php if (!empty($_SESSION['flash_success'])): ?>
+        <div class="success-message"><?= htmlspecialchars($_SESSION['flash_success']) ?></div>
+        <?php unset($_SESSION['flash_success']); ?>
+    <?php endif; ?>
+
     <pre id="log-pre">Connecting…</pre>
     <div id="status-msg"></div>
 
     <div id="finish-panel" style="display:none">
         <div class="steps" style="margin-bottom:1.25rem">
+            <div class="step-dot completed"></div>
             <div class="step-dot completed"></div>
             <div class="step-dot completed"></div>
             <div class="step-dot completed"></div>
@@ -61,7 +67,7 @@
     </div>
 
     <p style="text-align:center;margin-top:1.25rem;font-size:.8rem;color:#9ca3af">
-        Step 8 of 8 &mdash;
+        Step 9 of 9 &mdash;
         <a href="customer" style="color:#9ca3af">Go to Dashboard</a>
     </p>
 </div>

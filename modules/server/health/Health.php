@@ -188,6 +188,8 @@ class Health extends Trongate
     $cmd = 'ssh'
       . ' -i '  . escapeshellarg(RUNNER_SSH_KEY)
       . ' -o StrictHostKeyChecking=accept-new'
+      . ' -o UserKnownHostsFile=/dev/null'
+      . ' -o LogLevel=ERROR'
       . ' -o BatchMode=yes'
       . ' -o ConnectTimeout=' . $timeout
       . ' -p '  . $port

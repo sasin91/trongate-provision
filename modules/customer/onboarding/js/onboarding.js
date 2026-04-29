@@ -176,6 +176,90 @@
         };
     }
 
+    function normalizeSshPublicKey(value) {
+        const parts = value.trim().split(/\s+/).filter(Boolean);
+        if (parts.length < 3) {
+            return parts.join(' ');
+        }
+        return parts[0] + ' ' + parts[1] + ' ' + parts.slice(2).join(' ');
+    }
+
+    function getSshKeyMessage(value) {
+        if (!value) {
+            return '';
+        }
+
+        const parts = value.split(' ');
+        const validTypes = [
+            'ssh-rsa',
+            'ssh-ed25519',
+            'ecdsa-sha2-nistp256',
+            'ecdsa-sha2-nistp384',
+            'ecdsa-sha2-nistp521',
+        ];
+
+        if (!validTypes.includes(parts[0])) {
+            return 'Use a public key beginning with ssh-ed25519, ssh-rsa, or ecdsa-sha2-.';
+        }
+        if (!parts[1]) {
+            return 'Paste the full public key, including the encoded key data.';
+        }
+        if (!/^[A-Za-z0-9+/]+=*$/.test(parts[1])) {
+            return 'The encoded key data is not valid base64 text.';
+        }
+
+        try {
+            atob(parts[1]);
+        } catch (error) {
+            return 'The encoded key data is not valid base64 text.';
+        }
+
+        return '';
+    }
+
+    function validateSshKeyInput(input) {
+        const normalized = normalizeSshPublicKey(input.value);
+        if (input.value !== normalized) {
+            input.value = normalized;
+        }
+
+        const message = getSshKeyMessage(normalized);
+        input.setCustomValidity(message);
+
+        const group = input.closest('.form-group');
+        const feedback = group ? group.querySelector('[data-ssh-key-feedback]') : null;
+        if (feedback) {
+            feedback.textContent = message;
+            feedback.classList.toggle('is-visible', Boolean(message));
+        }
+    }
+
+    function bindSshKeyValidation() {
+        document.querySelectorAll('[data-ssh-public-key]').forEach(function (input) {
+            ['blur', 'change'].forEach(function (eventName) {
+                input.addEventListener(eventName, function () {
+                    validateSshKeyInput(input);
+                });
+            });
+
+            input.addEventListener('paste', function () {
+                window.setTimeout(function () {
+                    validateSshKeyInput(input);
+                }, 0);
+            });
+
+            if (input.form) {
+                input.form.addEventListener('submit', function (event) {
+                    validateSshKeyInput(input);
+                    if (!input.checkValidity()) {
+                        event.preventDefault();
+                        input.reportValidity();
+                    }
+                });
+            }
+        });
+    }
+
     function initOnboardingStreams() {
         document.querySelectorAll('[data-onboarding-stream]').forEach(function (root) {
             if (root.dataset.onboardingStream === 'provision') {
@@ -189,6 +273,8 @@
     function bindSubmitLoaders() {
         document.querySelectorAll('form').forEach(function (form) {
             form.addEventListener('submit', function () {
+                if (!form.checkValidity()) return;
+
                 const submitButton = form.querySelector('button[type="submit"]');
                 if (!submitButton) return;
 
@@ -257,6 +343,7 @@
     }
 
     document.addEventListener('DOMContentLoaded', function () {
+        bindSshKeyValidation();
         bindSubmitLoaders();
         bindRegisterDeploymentInteractions();
         initOnboardingStreams();

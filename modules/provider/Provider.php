@@ -51,32 +51,30 @@ class Provider extends Trongate {
         $this->module('cloud');
         $hetzner = $this->cloud->hetzner($token);
 
-        // Upload customer SSH key to Hetzner
-        $label  = 'provision-' . substr(md5($customer->email), 0, 8);
+        $ssh_key_ids = [];
         $key_id = '';
+        $label = '';
 
-        if (!empty($customer->ssh_public_key)) {
-            try {
-                $key_id = $hetzner->upload_ssh_key($label, $customer->ssh_public_key);
-            } catch (Client_Error $e) {
-                if ($e->getCode() === 409) {
-                    // Key already exists — find it by fingerprint
-                    foreach ($hetzner->list_ssh_keys() as $key) {
-                        $stored = preg_split('/\s+/', trim($key['public_key']));
-                        $input  = preg_split('/\s+/', trim($customer->ssh_public_key));
-                        if (isset($stored[1], $input[1]) && $stored[1] === $input[1]) {
-                            $key_id = (string) $key['id'];
-                            $label  = $key['name'];
-                            break;
-                        }
-                    }
-                } else {
-                    throw $e;
-                }
-            }
+        $runner_public_key = $this->_runner_public_key();
+        if ($runner_public_key === '') {
+            $_SESSION['flash_error'] = 'Runner SSH public key not found. Create ' . RUNNER_SSH_KEY . '.pub before connecting Hetzner.';
+            redirect('provider/connect');
+            return;
         }
 
-        $this->model->save_hetzner((int) $customer->id, $token, $key_id, $label);
+        $runner_label = 'provision-runner-' . substr(md5(BASE_URL), 0, 8);
+        $runner_key = $hetzner->ensure_ssh_key($runner_label, $runner_public_key);
+        $key_id = $runner_key['id'];
+        $label = $runner_key['name'];
+        $ssh_key_ids[] = $runner_key['id'];
+
+        if (!empty($customer->ssh_public_key)) {
+            $customer_label = 'provision-customer-' . substr(md5($customer->email), 0, 8);
+            $customer_key = $hetzner->ensure_ssh_key($customer_label, $customer->ssh_public_key);
+            $ssh_key_ids[] = $customer_key['id'];
+        }
+
+        $this->model->save_hetzner((int) $customer->id, $token, $key_id, $label, $ssh_key_ids);
         $_SESSION['flash_success'] = 'Hetzner Cloud connected.' . ($key_id ? ' SSH key uploaded.' : '');
         redirect('provider');
     }
@@ -116,5 +114,17 @@ class Provider extends Trongate {
         $this->module('customer');
         $this->customer->_require_onboarded();
         return $this->customer->_require_customer();
+    }
+
+    private function _runner_public_key(): string {
+        if (!defined('RUNNER_SSH_KEY') || RUNNER_SSH_KEY === '') {
+            return '';
+        }
+        $path = RUNNER_SSH_KEY . '.pub';
+        if (is_readable($path)) {
+            return trim((string) file_get_contents($path));
+        }
+        exec('ssh-keygen -y -f ' . escapeshellarg(RUNNER_SSH_KEY) . ' 2>/dev/null', $out, $code);
+        return $code === 0 ? trim(implode("\n", $out)) : '';
     }
 }

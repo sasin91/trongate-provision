@@ -15,12 +15,19 @@ class Provider_model extends Model {
         return $this->secrets->get('customer', $customer_id, 'hetzner');
     }
 
-    function save_hetzner(int $customer_id, string $token, string $ssh_key_id, string $ssh_key_label): void {
+    function save_hetzner(
+        int $customer_id,
+        string $token,
+        string $ssh_key_id,
+        string $ssh_key_label,
+        array $ssh_key_ids = []
+    ): void {
         $this->module('secrets');
         $this->secrets->save('customer', $customer_id, 'hetzner', [
             'token'         => $token,
             'ssh_key_id'    => $ssh_key_id,
             'ssh_key_label' => $ssh_key_label,
+            'ssh_key_ids'   => array_values(array_unique(array_filter($ssh_key_ids))),
         ]);
     }
 

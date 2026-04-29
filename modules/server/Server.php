@@ -151,7 +151,30 @@ class Server extends Trongate
     $region = post("region", true);
     $type = post("server_type", true);
 
-    $ssh_key_ids = !empty($creds["ssh_key_id"]) ? [$creds["ssh_key_id"]] : [];
+    $runner_public_key = $this->_runner_public_key();
+    if ($runner_public_key === "") {
+      $_SESSION["flash_error"] =
+        "Runner SSH public key not found. Create " .
+        RUNNER_SSH_KEY .
+        ".pub before provisioning Hetzner servers.";
+      return false;
+    }
+
+    $runner_key = $h->ensure_ssh_key(
+      "provision-runner-" . substr(md5(BASE_URL), 0, 8),
+      $runner_public_key,
+    );
+    $ssh_key_ids = $this->_hetzner_ssh_key_ids($creds);
+    $ssh_key_ids[] = $runner_key["id"];
+    $ssh_key_ids = array_values(array_unique(array_filter($ssh_key_ids)));
+
+    $this->provider->model->save_hetzner(
+      (int) $customer->id,
+      $creds["token"],
+      $creds["ssh_key_id"] ?? $runner_key["id"],
+      $creds["ssh_key_label"] ?? $runner_key["name"],
+      $ssh_key_ids,
+    );
 
     $result = $h->create_server(
       name: preg_replace("/[^a-z0-9-]/", "-", strtolower($name)),
@@ -549,6 +572,8 @@ class Server extends Trongate
       " -i " .
       escapeshellarg(RUNNER_SSH_KEY) .
       " -o StrictHostKeyChecking=no" .
+      " -o UserKnownHostsFile=/dev/null" .
+      " -o LogLevel=ERROR" .
       " -o BatchMode=yes" .
       " -o ConnectTimeout=15" .
       " -o ServerAliveInterval=30" .
@@ -846,6 +871,8 @@ class Server extends Trongate
       " -i " .
       escapeshellarg(RUNNER_SSH_KEY) .
       " -o StrictHostKeyChecking=no" .
+      " -o UserKnownHostsFile=/dev/null" .
+      " -o LogLevel=ERROR" .
       " -o BatchMode=yes" .
       " -o ConnectTimeout=15" .
       " -o ServerAliveInterval=30" .
@@ -882,6 +909,39 @@ class Server extends Trongate
       '/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i',
       $domain,
     );
+  }
+
+  private function _hetzner_ssh_key_ids(array $creds): array
+  {
+    $ids = $creds["ssh_key_ids"] ?? [];
+    if (!is_array($ids)) {
+      $ids = [];
+    }
+    if (!empty($creds["ssh_key_id"])) {
+      array_unshift($ids, $creds["ssh_key_id"]);
+    }
+    $normalized = [];
+    foreach ($ids as $id) {
+      $id = trim((string) $id);
+      if ($id === "" || in_array($id, $normalized, true)) {
+        continue;
+      }
+      $normalized[] = $id;
+    }
+    return $normalized;
+  }
+
+  private function _runner_public_key(): string
+  {
+    if (!defined("RUNNER_SSH_KEY") || RUNNER_SSH_KEY === "") {
+      return "";
+    }
+    $path = RUNNER_SSH_KEY . ".pub";
+    if (is_readable($path)) {
+      return trim((string) file_get_contents($path));
+    }
+    exec("ssh-keygen -y -f " . escapeshellarg(RUNNER_SSH_KEY) . " 2>/dev/null", $out, $code);
+    return $code === 0 ? trim(implode("\n", $out)) : "";
   }
 
   private function _hetzner_client(int $customer_id): Hetzner

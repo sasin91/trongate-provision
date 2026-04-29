@@ -48,6 +48,9 @@
         <div class="step-dot completed"></div>
         <div class="step-dot active"></div>
         <div class="step-dot"></div>
+        <div class="step-dot"></div>
+        <div class="step-dot"></div>
+        <div class="step-dot"></div>
     </div>
 
     <button type="submit" class="btn-primary">
@@ -57,7 +60,7 @@
     <?= form_close() ?>
 
     <p class="onboarding-footer-note">
-        Step 5 of 6 &mdash;
+        Step 5 of 9 &mdash;
         <a href="customer-onboarding/choose_provider">&#8592; Back</a>
     </p>
 </div>

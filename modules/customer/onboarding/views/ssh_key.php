@@ -22,8 +22,13 @@
     <div class="form-group">
         <label class="form-label">SSH Public Key</label>
         <textarea name="public_key" class="form-input ssh-key-input" rows="5"
+            data-ssh-public-key
+            spellcheck="false"
+            autocapitalize="off"
+            autocomplete="off"
             placeholder="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI… user@host"
             required><?= htmlspecialchars(post('public_key') ?: '') ?></textarea>
+        <small class="key-validation" data-ssh-key-feedback></small>
         <small class="key-help">
             Run <code class="inline-code">cat ~/.ssh/id_ed25519.pub</code>
             to get it. No key yet?
@@ -37,6 +42,10 @@
         <div class="step-dot"></div>
         <div class="step-dot"></div>
         <div class="step-dot"></div>
+        <div class="step-dot"></div>
+        <div class="step-dot"></div>
+        <div class="step-dot"></div>
+        <div class="step-dot"></div>
     </div>
 
     <button type="submit" class="btn-primary">
@@ -46,7 +55,7 @@
     <?= form_close() ?>
 
     <p class="onboarding-footer-note">
-        Step 1 of 5 &mdash; <a href="customer/logout">Sign out</a>
+        Step 1 of 9 &mdash; <a href="customer/logout">Sign out</a>
     </p>
 </div>
 

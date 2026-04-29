@@ -12,6 +12,9 @@ class Onboarding extends Trongate
   //  Step 5 → server_manual        (IP + name)
   //         → server_hetzner       (API token + guidance)
   //  Step 6 → register_deployment  (both paths: confirm server + create deployment)
+  //  Step 7 → provision_server
+  //  Step 8 → dns_ssl
+  //  Step 9 → deploy_app
 
   function index(): void
   {
@@ -70,7 +73,7 @@ class Onboarding extends Trongate
       return;
     }
 
-    $this->model->save_ssh_key((int) $customer->id, post('public_key'));
+    $this->model->save_ssh_key((int) $customer->id, $this->_normalize_ssh_public_key((string) post('public_key')));
     redirect('customer-onboarding/environment');
   }
 
@@ -364,6 +367,7 @@ class Onboarding extends Trongate
     $this->model->mark_onboarded((int) $customer->id);
     $_SESSION['onboarding_server_id']     = $server_id;
     $_SESSION['onboarding_deployment_id'] = (int) $id;
+    unset($_SESSION['onboarding_dns_ssl_seen']);
     unset($_SESSION['onboarding_provider']);
     redirect('customer-onboarding/provision_server');
   }
@@ -406,30 +410,33 @@ class Onboarding extends Trongate
     $this->module('cloud');
     $h = $this->cloud->hetzner($token);
 
-    // Upload customer SSH key to Hetzner
-    $label  = 'provision-' . substr(md5($customer->email), 0, 8);
+    $ssh_key_ids = [];
     $key_id = '';
+    $label = '';
+
+    $runner_public_key = $this->_runner_public_key();
+    if ($runner_public_key === '') {
+      $_SESSION['form_submission_errors'][] = [
+        'Runner SSH public key not found. Create ' . RUNNER_SSH_KEY . '.pub before connecting Hetzner.',
+      ];
+      $this->server_hetzner();
+      return;
+    }
+
+    $runner_label = 'provision-runner-' . substr(md5(BASE_URL), 0, 8);
+    $runner_key = $h->ensure_ssh_key($runner_label, $runner_public_key);
+    $key_id = $runner_key['id'];
+    $label = $runner_key['name'];
+    $ssh_key_ids[] = $runner_key['id'];
 
     if (!empty($customer->ssh_public_key)) {
-      try {
-        $key_id = $h->upload_ssh_key($label, $customer->ssh_public_key);
-      } catch (Client_Error $e) {
-        if ($e->getCode() === 409) {
-          foreach ($h->list_ssh_keys() as $k) {
-            $stored = preg_split('/\s+/', trim($k['public_key']));
-            $input  = preg_split('/\s+/', trim($customer->ssh_public_key));
-            if (isset($stored[1], $input[1]) && $stored[1] === $input[1]) {
-              $key_id = (string) $k['id'];
-              $label  = $k['name'];
-              break;
-            }
-          }
-        }
-      }
+      $customer_label = 'provision-customer-' . substr(md5($customer->email), 0, 8);
+      $customer_key = $h->ensure_ssh_key($customer_label, $customer->ssh_public_key);
+      $ssh_key_ids[] = $customer_key['id'];
     }
 
     $this->module('provider');
-    $this->provider->model->save_hetzner((int) $customer->id, $token, $key_id, $label);
+    $this->provider->model->save_hetzner((int) $customer->id, $token, $key_id, $label, $ssh_key_ids);
 
     redirect('customer-onboarding/register_deployment');
   }
@@ -449,7 +456,7 @@ class Onboarding extends Trongate
     $region = post('region', true);
     $type   = post('server_type', true);
 
-    $ssh_key_ids = !empty($creds['ssh_key_id']) ? [$creds['ssh_key_id']] : [];
+    $ssh_key_ids = $this->_hetzner_ssh_key_ids($creds);
 
     $result = $h->create_server(
       name: preg_replace('/[^a-z0-9-]/', '-', strtolower($name)),
@@ -526,6 +533,39 @@ class Onboarding extends Trongate
     return $this->cloud->hetzner($creds['token']);
   }
 
+  private function _hetzner_ssh_key_ids(array $creds): array
+  {
+    $ids = $creds['ssh_key_ids'] ?? [];
+    if (!is_array($ids)) {
+      $ids = [];
+    }
+    if (!empty($creds['ssh_key_id'])) {
+      array_unshift($ids, $creds['ssh_key_id']);
+    }
+    $normalized = [];
+    foreach ($ids as $id) {
+      $id = trim((string) $id);
+      if ($id === '' || in_array($id, $normalized, true)) {
+        continue;
+      }
+      $normalized[] = $id;
+    }
+    return $normalized;
+  }
+
+  private function _runner_public_key(): string
+  {
+    if (!defined('RUNNER_SSH_KEY') || RUNNER_SSH_KEY === '') {
+      return '';
+    }
+    $path = RUNNER_SSH_KEY . '.pub';
+    if (is_readable($path)) {
+      return trim((string) file_get_contents($path));
+    }
+    exec('ssh-keygen -y -f ' . escapeshellarg(RUNNER_SSH_KEY) . ' 2>/dev/null', $out, $code);
+    return $code === 0 ? trim(implode("\n", $out)) : '';
+  }
+
   // ── Step 7: Provision server ────────────────────────────────────
 
   function provision_server(): void
@@ -549,11 +589,98 @@ class Onboarding extends Trongate
     ]);
   }
 
-  // ── Step 8: Deploy app ──────────────────────────────────────────
+  // ── Step 8: DNS & SSL ───────────────────────────────────────────
+
+  function dns_ssl(): void
+  {
+    $customer = $this->_require_logged_in();
+    $server = $this->_onboarding_server($customer);
+
+    if ($server === false) {
+      redirect('customer');
+      return;
+    }
+    if ($server->status !== 'active') {
+      redirect('customer-onboarding/provision_server');
+      return;
+    }
+
+    $this->view('dns_ssl', [
+      'server' => $server,
+      'domain' => trim((string) ($server->domain ?? '')),
+      'can_enable_ssl' => $this->_can_enable_ssl($server),
+      'ssl_error' => $this->_ssl_preflight_error($server),
+    ]);
+  }
+
+  function submit_dns_ssl(): void
+  {
+    $customer = $this->_require_logged_in();
+    $server = $this->_onboarding_server($customer);
+
+    if ($server === false) {
+      redirect('customer');
+      return;
+    }
+    if ($server->status !== 'active') {
+      redirect('customer-onboarding/provision_server');
+      return;
+    }
+
+    $action = post('action', true) === 'enable_ssl' ? 'enable_ssl' : 'skip';
+    $this->validation->set_rules('dummy', 'dummy', 'max_length[1]');
+    if ($this->validation->run() !== true) {
+      $this->dns_ssl();
+      return;
+    }
+
+    if ($action === 'skip') {
+      $_SESSION['onboarding_dns_ssl_seen'] = 1;
+      redirect('customer-onboarding/deploy_app');
+      return;
+    }
+
+    $error = $this->_ssl_preflight_error($server);
+    if ($error !== '') {
+      $_SESSION['form_submission_errors'][] = [$error];
+      $this->dns_ssl();
+      return;
+    }
+
+    $script = $this->_render_certbot_script($server);
+    if (session_status() === PHP_SESSION_ACTIVE) {
+      session_write_close();
+    }
+
+    [$exit_code, $log] = $this->_run_remote_bash($server, $script);
+
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+      session_start();
+    }
+
+    if ($exit_code !== 0) {
+      $_SESSION['form_submission_errors'][] = [
+        'SSL setup failed: ' . substr(trim($log) ?: 'certbot failed.', 0, 500),
+      ];
+      $this->dns_ssl();
+      return;
+    }
+
+    $_SESSION['onboarding_dns_ssl_seen'] = 1;
+    $_SESSION['flash_success'] = 'SSL enabled for ' . trim((string) $server->domain) . '.';
+    redirect('customer-onboarding/deploy_app');
+  }
+
+  // ── Step 9: Deploy app ──────────────────────────────────────────
 
   function deploy_app(): void
   {
     $customer      = $this->_require_logged_in();
+    if (empty($_SESSION['onboarding_dns_ssl_seen'])) {
+      redirect('customer-onboarding/dns_ssl');
+      return;
+    }
+
     $deployment_id = (int) ($_SESSION['onboarding_deployment_id'] ?? 0);
     if ($deployment_id === 0) {
       redirect('customer');
@@ -575,25 +702,54 @@ class Onboarding extends Trongate
 
   function validate_ssh_key(string $public_key): bool|string
   {
-    $public_key = trim($public_key);
+    $public_key = $this->_normalize_ssh_public_key($public_key);
     if (empty($public_key)) return 'SSH Public Key is required.';
 
     $valid_types = ['ssh-rsa', 'ssh-ed25519', 'ecdsa-sha2-nistp256', 'ecdsa-sha2-nistp384', 'ecdsa-sha2-nistp521'];
-    $ok = false;
-    foreach ($valid_types as $type) {
-      if (str_starts_with($public_key, $type . ' ')) {
-        $ok = true;
-        break;
-      }
+    $parts = explode(' ', $public_key, 3);
+    $type = $parts[0] ?? '';
+
+    if (!in_array($type, $valid_types, true)) {
+      return 'Invalid format. Must start with ssh-rsa, ssh-ed25519, or ecdsa-sha2-*.';
     }
 
-    if (!$ok) return 'Invalid format. Must start with ssh-rsa, ssh-ed25519, or ecdsa-sha2-*.';
-
-    $parts = preg_split('/\s+/', $public_key);
     if (count($parts) < 2) return 'Invalid structure. Expected: [type] [base64-data] [optional-comment]';
     if (!preg_match('/^[A-Za-z0-9+\/]+=*$/', $parts[1])) return 'Invalid key data — not valid base64.';
 
+    $decoded = base64_decode($parts[1], true);
+    if ($decoded === false || $decoded === '') return 'Invalid key data — not valid base64.';
+
+    $blob_type = $this->_ssh_key_blob_type($decoded);
+    if ($blob_type !== $type) {
+      return 'Invalid key data. The encoded key does not match the declared key type.';
+    }
+
     return true;
+  }
+
+  private function _normalize_ssh_public_key(string $public_key): string
+  {
+    $parts = preg_split('/\s+/', trim($public_key));
+    if ($parts === false) {
+      return '';
+    }
+    $parts = array_values(array_filter($parts, static fn($part) => $part !== ''));
+    if (count($parts) < 3) {
+      return implode(' ', $parts);
+    }
+    return $parts[0] . ' ' . $parts[1] . ' ' . implode(' ', array_slice($parts, 2));
+  }
+
+  private function _ssh_key_blob_type(string $decoded): string
+  {
+    if (strlen($decoded) < 4) {
+      return '';
+    }
+    $length = unpack('N', substr($decoded, 0, 4))[1] ?? 0;
+    if (!is_int($length) || $length <= 0 || strlen($decoded) < 4 + $length) {
+      return '';
+    }
+    return substr($decoded, 4, $length);
   }
 
   function validate_hetzner_token(string $token): bool|string
@@ -622,6 +778,108 @@ class Onboarding extends Trongate
       return false;
     }
     return $dest;
+  }
+
+  private function _onboarding_server(object $customer): object|false
+  {
+    $server_id = (int) ($_SESSION['onboarding_server_id'] ?? 0);
+    if ($server_id === 0) {
+      return false;
+    }
+    $this->module('server');
+    return $this->server->model->get($server_id, (int) $customer->id);
+  }
+
+  private function _can_enable_ssl(object $server): bool
+  {
+    return $this->_ssl_preflight_error($server) === '';
+  }
+
+  private function _ssl_preflight_error(object $server): string
+  {
+    $domain = trim((string) ($server->domain ?? ''));
+    $email = trim((string) ($server->customer_email ?? ''));
+    $user = $server->ssh_user ?: 'root';
+
+    if (!defined('RUNNER_SSH_KEY') || !RUNNER_SSH_KEY) {
+      return 'RUNNER_SSH_KEY is not configured.';
+    }
+    if (!filter_var($server->ip_address, FILTER_VALIDATE_IP)) {
+      return 'Invalid server IP address.';
+    }
+    if (!preg_match('/^[a-z_][a-z0-9_.-]{0,31}$/i', $user)) {
+      return 'Invalid SSH user.';
+    }
+    if (!$this->_valid_domain($domain)) {
+      return 'Configure a valid environment domain before enabling SSL.';
+    }
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+      return 'Configure a valid customer email before enabling SSL.';
+    }
+
+    return '';
+  }
+
+  private function _render_certbot_script(object $server): string
+  {
+    return (string) $this->view(
+      'scripts/certbot_script',
+      [
+        'view_module' => 'server',
+        'server' => $server,
+      ],
+      true,
+    );
+  }
+
+  private function _run_remote_bash(object $server, string $script): array
+  {
+    $user = $server->ssh_user ?: 'root';
+    $port = (int) ($server->ssh_port ?: 22);
+    $timeout = RUNNER_SCRIPT_TIMEOUT;
+    $cmd =
+      'ssh' .
+      ' -i ' .
+      escapeshellarg(RUNNER_SSH_KEY) .
+      ' -o StrictHostKeyChecking=no' .
+      ' -o UserKnownHostsFile=/dev/null' .
+      ' -o LogLevel=ERROR' .
+      ' -o BatchMode=yes' .
+      ' -o ConnectTimeout=15' .
+      ' -o ServerAliveInterval=30' .
+      ' -o ServerAliveCountMax=3' .
+      ' -p ' .
+      $port .
+      ' ' .
+      escapeshellarg("{$user}@{$server->ip_address}") .
+      " 'timeout {$timeout} bash -s' 2>&1";
+
+    $proc = proc_open(
+      $cmd,
+      [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['file', '/dev/null', 'w']],
+      $pipes,
+    );
+    if (!is_resource($proc)) {
+      return [1, 'Failed to open SSH connection.'];
+    }
+
+    fwrite($pipes[0], $script);
+    fclose($pipes[0]);
+    $output = stream_get_contents($pipes[1]);
+    fclose($pipes[1]);
+
+    return [proc_close($proc), trim($output)];
+  }
+
+  private function _valid_domain(string $domain): bool
+  {
+    if ($domain === '' || strlen($domain) > 253) {
+      return false;
+    }
+    return (bool) preg_match(
+      '/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i',
+      $domain,
+    );
   }
 
   private function _require_not_onboarded(): object

@@ -156,6 +156,27 @@ body {
     border: 1px solid #fee2e2;
 }
 
+.success-message {
+    background-color: #f0fdf4;
+    color: #166534;
+    padding: 0.75rem;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    margin-bottom: 1.5rem;
+    border: 1px solid #bbf7d0;
+}
+
+.key-validation {
+    display: none;
+    color: #991b1b;
+    font-size: 0.8125rem;
+    margin-top: 0.5rem;
+}
+
+.key-validation.is-visible {
+    display: block;
+}
+
 /* Steps Indicator (Optional but nice) */
 .steps {
     display: flex;
@@ -283,6 +304,59 @@ body {
 .summary-row strong {
     color: var(--text-main);
     text-align: right;
+}
+
+.dns-record {
+    border: 1px solid #c7d2fe;
+    background: #eef2ff;
+    border-radius: 8px;
+    padding: 0.875rem 1rem;
+    margin-bottom: 1.25rem;
+}
+
+.dns-record-row {
+    display: grid;
+    grid-template-columns: 4.5rem 1fr;
+    gap: 0.75rem;
+    align-items: baseline;
+    font-size: 0.82rem;
+    line-height: 1.9;
+}
+
+.dns-record-row span {
+    color: #64748b;
+}
+
+.dns-record-row strong {
+    color: #1e1b4b;
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    word-break: break-all;
+}
+
+.secondary-action-form {
+    margin-top: 0.75rem;
+}
+
+.btn-secondary-onboarding {
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #475569;
+    background-color: #f8fafc;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.btn-secondary-onboarding:hover {
+    background-color: #f1f5f9;
+    border-color: #cbd5e1;
 }
 
 .tab-nav {

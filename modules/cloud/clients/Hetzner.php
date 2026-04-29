@@ -135,6 +135,25 @@ class Hetzner extends Client {
         return (string) $response['ssh_key']['id'];
     }
 
+    function ensure_ssh_key(string $name, string $public_key): array {
+        try {
+            $id = $this->upload_ssh_key($name, $public_key);
+            return ['id' => $id, 'name' => $name];
+        } catch (Client_Error $e) {
+            if ($e->getCode() !== 409) {
+                throw $e;
+            }
+            foreach ($this->list_ssh_keys() as $key) {
+                $stored = preg_split('/\s+/', trim($key['public_key'] ?? ''));
+                $input = preg_split('/\s+/', trim($public_key));
+                if (isset($stored[1], $input[1]) && $stored[1] === $input[1]) {
+                    return ['id' => (string) $key['id'], 'name' => $key['name']];
+                }
+            }
+            throw $e;
+        }
+    }
+
     function delete_ssh_key(string $key_id): bool {
         try {
             $this->request('DELETE', "/ssh_keys/{$key_id}");

@@ -52,14 +52,15 @@
             <div class="step-dot completed"></div>
             <div class="step-dot active"></div>
             <div class="step-dot"></div>
+            <div class="step-dot"></div>
         </div>
-        <a id="next-btn" href="customer-onboarding/deploy_app" class="btn-primary">
-            Deploy App &#10148;
+        <a id="next-btn" href="customer-onboarding/dns_ssl" class="btn-primary">
+            Configure DNS &amp; SSL &#10148;
         </a>
     </div>
 
     <p style="text-align:center;margin-top:1.25rem;font-size:.8rem;color:#9ca3af">
-        Step 7 of 8 &mdash;
+        Step 7 of 9 &mdash;
         <a href="customer" style="color:#9ca3af">Skip to Dashboard</a>
     </p>
 </div>

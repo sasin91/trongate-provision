@@ -52,6 +52,9 @@ $_src_partial = __DIR__ . '/_source_fields.php';
         <div class="step-dot completed"></div>
         <div class="step-dot completed"></div>
         <div class="step-dot active"></div>
+        <div class="step-dot"></div>
+        <div class="step-dot"></div>
+        <div class="step-dot"></div>
     </div>
 
     <button type="submit" class="btn-primary">
@@ -141,6 +144,7 @@ $_src_partial = __DIR__ . '/_source_fields.php';
             <div class="step-dot active"></div>
             <div class="step-dot"></div>
             <div class="step-dot"></div>
+            <div class="step-dot"></div>
         </div>
 
         <button type="submit" class="btn-primary">
@@ -192,6 +196,7 @@ $_src_partial = __DIR__ . '/_source_fields.php';
             <div class="step-dot active"></div>
             <div class="step-dot"></div>
             <div class="step-dot"></div>
+            <div class="step-dot"></div>
         </div>
 
         <button type="submit" class="btn-primary">
@@ -205,7 +210,7 @@ $_src_partial = __DIR__ . '/_source_fields.php';
     <?php endif; ?>
 
     <p class="onboarding-footer-note">
-        Step 6 of 8 &mdash;
+        Step 6 of 9 &mdash;
         <a href="<?= $back_url ?>">&#8592; Back</a>
     </p>
 </div>
