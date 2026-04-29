@@ -26,6 +26,9 @@ chmod 600 "/home/$PROVISION_USER/.ssh/authorized_keys" 2>/dev/null || true
 cat > "/etc/sudoers.d/$PROVISION_USER" << SUDOEOF
 $PROVISION_USER ALL=(ALL) NOPASSWD: /usr/bin/systemctl reload apache2
 $PROVISION_USER ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart apache2
+$PROVISION_USER ALL=(ALL) NOPASSWD: /usr/bin/tee /etc/apache2/sites-available/*.conf
+$PROVISION_USER ALL=(ALL) NOPASSWD: /usr/sbin/a2ensite *
+$PROVISION_USER ALL=(ALL) NOPASSWD: /usr/sbin/a2dissite 000-default
 SUDOEOF
 chmod 440 "/etc/sudoers.d/$PROVISION_USER"
 
