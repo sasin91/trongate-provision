@@ -39,7 +39,7 @@
         </div>
     </div>
 
-    <?= form_open('customer-onboarding/submit_register_deployment', ['enctype' => 'multipart/form-data']) ?>
+    <?= form_open('customer-onboarding/register_deployment', ['enctype' => 'multipart/form-data']) ?>
 
     <?php include $_src_partial ?>
 

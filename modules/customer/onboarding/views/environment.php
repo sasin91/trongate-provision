@@ -27,7 +27,7 @@
 
     <?= validation_errors('<div class="error-message">', '</div>') ?>
 
-    <?= form_open('customer-onboarding/submit_environment') ?>
+    <?= form_open('customer-onboarding/environment') ?>
 
     <div class="form-row">
         <div class="form-group">

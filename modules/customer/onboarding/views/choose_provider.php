@@ -15,7 +15,7 @@
         <p>Choose how you want to add your first server. You can use both methods later from the dashboard.</p>
     </div>
 
-    <?= form_open('customer-onboarding/submit_choose_provider') ?>
+    <?= form_open('customer-onboarding/choose_provider') ?>
 
     <div class="provider-grid">
 

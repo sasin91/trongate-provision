@@ -68,18 +68,17 @@ class Onboarding extends Trongate
 
   function ssh_key(): void
   {
-    $this->_require_not_onboarded();
-    $this->view('ssh_key');
-  }
-
-  function submit_ssh_key(): void
-  {
     $customer = $this->_require_not_onboarded();
+
+    if (!$this->_is_post()) {
+      $this->view('ssh_key');
+      return;
+    }
 
     $this->validation->set_rules('public_key', 'SSH Public Key', 'required|callback_validate_ssh_key');
 
     if ($this->validation->run() !== true) {
-      $this->ssh_key();
+      $this->view('ssh_key');
       return;
     }
 
@@ -97,18 +96,16 @@ class Onboarding extends Trongate
       redirect('customer-onboarding/ssh_key');
     }
 
-    $this->view('environment', ['php_versions' => $this->php_versions]);
-  }
-
-  function submit_environment(): void
-  {
-    $customer = $this->_require_not_onboarded();
+    if (!$this->_is_post()) {
+      $this->view('environment', ['php_versions' => $this->php_versions]);
+      return;
+    }
 
     $this->validation->set_rules('name',        'Environment name', 'required|max_length[100]');
     $this->validation->set_rules('php_version', 'PHP version',      'required');
 
     if ($this->validation->run() !== true) {
-      $this->environment();
+      $this->view('environment', ['php_versions' => $this->php_versions]);
       return;
     }
 
@@ -178,12 +175,10 @@ class Onboarding extends Trongate
       redirect('customer-onboarding/environment');
     }
 
-    $this->view('choose_provider');
-  }
-
-  function submit_choose_provider(): void
-  {
-    $customer = $this->_require_not_onboarded();
+    if (!$this->_is_post()) {
+      $this->view('choose_provider');
+      return;
+    }
 
     $choice = post('provider', true);
     if (!in_array($choice, ['manual', 'hetzner'], true)) {
@@ -222,43 +217,38 @@ class Onboarding extends Trongate
       redirect('customer-onboarding/environment');
     }
 
-    $this->view('server_manual', [
-      'env' => $env,
-    ]);
-  }
+    if ($this->_is_post()) {
+      $this->validation->set_rules('name',       'Server name', 'required|max_length[100]');
+      $this->validation->set_rules('ip_address', 'IP address',  'required|max_length[45]');
 
-  function submit_server_manual(): void
-  {
-    $customer = $this->_require_not_onboarded();
+      if ($this->validation->run() !== true) {
+        $this->view('server_manual', [
+          'env' => $env,
+        ]);
+        return;
+      }
 
-    $env = $this->model->first_environment((int) $customer->id);
-    if ($env === false) {
-      redirect('customer-onboarding/environment');
-    }
+      $server_id = (int) $this->model->create_server([
+        'environment_id' => (int) $env->id,
+        'customer_id'    => (int) $customer->id,
+        'name'           => post('name', true),
+        'ip_address'     => post('ip_address', true),
+        'ssh_user'       => 'root',
+        'ssh_port'       => 22,
+        'provider'       => 'manual',
+        'status'         => 'pending',
+      ]);
 
-    $this->validation->set_rules('name',       'Server name', 'required|max_length[100]');
-    $this->validation->set_rules('ip_address', 'IP address',  'required|max_length[45]');
+      $this->model->backfill_service_hosts((int) $env->id, post('ip_address', true));
+      $_SESSION['onboarding_server_id'] = $server_id;
 
-    if ($this->validation->run() !== true) {
-      $this->server_manual();
+      redirect('customer-onboarding/provision_server');
       return;
     }
 
-    $server_id = (int) $this->model->create_server([
-      'environment_id' => (int) $env->id,
-      'customer_id'    => (int) $customer->id,
-      'name'           => post('name', true),
-      'ip_address'     => post('ip_address', true),
-      'ssh_user'       => 'root',
-      'ssh_port'       => 22,
-      'provider'       => 'manual',
-      'status'         => 'pending',
+    $this->view('server_manual', [
+      'env' => $env,
     ]);
-
-    $this->model->backfill_service_hosts((int) $env->id, post('ip_address', true));
-    $_SESSION['onboarding_server_id'] = $server_id;
-
-    redirect('customer-onboarding/provision_server');
   }
 
   // ── Step 7: Create deployment ──────────────────────────────────
@@ -271,6 +261,71 @@ class Onboarding extends Trongate
       redirect('customer-onboarding/environment');
     }
 
+    if ($this->_is_post()) {
+      // Validate source fields before touching any server resources
+      $source_type = post('source_type', true) === 'zip' ? 'zip' : 'git';
+      if ($source_type === 'git') {
+        $this->validation->set_rules('repo_url', 'repo URL', 'required|max_length[500]');
+        $this->validation->set_rules('branch',   'branch',   'required|max_length[100]');
+      }
+
+      if ($this->validation->run() !== true) {
+        $this->_show_register_deployment($customer, $env);
+        return;
+      }
+
+      $zip_path = null;
+      if ($source_type === 'zip') {
+        $zip_path = $this->_store_zip();
+        if ($zip_path === false) {
+          $_SESSION['form_submission_errors'][] = ['Zip upload failed or file missing.'];
+          $this->_show_register_deployment($customer, $env);
+          return;
+        }
+      }
+
+      $server = $this->model->first_server((int) $customer->id);
+      if ($server === false) {
+        redirect('customer-onboarding/choose_provider');
+        return;
+      }
+      if ($server->status !== 'active') {
+        $_SESSION['onboarding_server_id'] = (int) $server->id;
+        redirect('customer-onboarding/provision_server');
+        return;
+      }
+      if (empty($_SESSION['onboarding_dns_ssl_seen'])) {
+        $_SESSION['onboarding_server_id'] = (int) $server->id;
+        redirect('customer-onboarding/dns_ssl');
+        return;
+      }
+
+      $server_id = (int) $server->id;
+
+      $id = $this->model->create_deployment([
+        'server_id'      => $server_id,
+        'environment_id' => (int) $env->id,
+        'customer_id'    => (int) $customer->id,
+        'source_type'    => $source_type,
+        'repo_url'       => $source_type === 'git' ? post('repo_url', true) : null,
+        'branch'         => $source_type === 'git' ? post('branch', true)   : null,
+        'zip_path'       => $zip_path,
+        'is_canary'      => 0,
+        'canary_weight'  => 100,
+        'status'         => 'script_ready',
+      ]);
+
+      $_SESSION['onboarding_server_id']     = $server_id;
+      $_SESSION['onboarding_deployment_id'] = (int) $id;
+      redirect('customer-onboarding/deploy_app');
+      return;
+    }
+
+    $this->_show_register_deployment($customer, $env);
+  }
+
+  function _show_register_deployment(object $customer, object $env): void
+  {
     $server = $this->model->first_server((int) $customer->id);
     if ($server === false) {
       redirect('customer-onboarding/choose_provider');
@@ -291,72 +346,6 @@ class Onboarding extends Trongate
     ]);
   }
 
-  function submit_register_deployment(): void
-  {
-    $customer = $this->_require_not_onboarded();
-    $env = $this->model->first_environment((int) $customer->id);
-    if ($env === false) {
-      redirect('customer-onboarding/environment');
-    }
-
-    // Validate source fields before touching any server resources
-    $source_type = post('source_type', true) === 'zip' ? 'zip' : 'git';
-    if ($source_type === 'git') {
-      $this->validation->set_rules('repo_url', 'repo URL', 'required|max_length[500]');
-      $this->validation->set_rules('branch',   'branch',   'required|max_length[100]');
-    }
-
-    if ($this->validation->run() !== true) {
-      $this->register_deployment();
-      return;
-    }
-
-    $zip_path = null;
-    if ($source_type === 'zip') {
-      $zip_path = $this->_store_zip();
-      if ($zip_path === false) {
-        $_SESSION['form_submission_errors'][] = ['Zip upload failed or file missing.'];
-        $this->register_deployment();
-        return;
-      }
-    }
-
-    $server = $this->model->first_server((int) $customer->id);
-    if ($server === false) {
-      redirect('customer-onboarding/choose_provider');
-      return;
-    }
-    if ($server->status !== 'active') {
-      $_SESSION['onboarding_server_id'] = (int) $server->id;
-      redirect('customer-onboarding/provision_server');
-      return;
-    }
-    if (empty($_SESSION['onboarding_dns_ssl_seen'])) {
-      $_SESSION['onboarding_server_id'] = (int) $server->id;
-      redirect('customer-onboarding/dns_ssl');
-      return;
-    }
-
-    $server_id = (int) $server->id;
-
-    $id = $this->model->create_deployment([
-      'server_id'      => $server_id,
-      'environment_id' => (int) $env->id,
-      'customer_id'    => (int) $customer->id,
-      'source_type'    => $source_type,
-      'repo_url'       => $source_type === 'git' ? post('repo_url', true) : null,
-      'branch'         => $source_type === 'git' ? post('branch', true)   : null,
-      'zip_path'       => $zip_path,
-      'is_canary'      => 0,
-      'canary_weight'  => 100,
-      'status'         => 'script_ready',
-    ]);
-
-    $_SESSION['onboarding_server_id']     = $server_id;
-    $_SESSION['onboarding_deployment_id'] = (int) $id;
-    redirect('customer-onboarding/deploy_app');
-  }
-
   // ── Step 5b: Hetzner ────────────────────────────────────────────
 
   function server_hetzner(): void
@@ -371,59 +360,62 @@ class Onboarding extends Trongate
       redirect('customer-onboarding/ssh_key');
     }
 
+    if ($this->_is_post()) {
+      $this->validation->set_rules('token', 'API Token', 'required|callback_validate_hetzner_token');
+
+      if ($this->validation->run() !== true) {
+        $this->_show_server_hetzner($customer);
+        return;
+      }
+
+      $token = post('token', true);
+
+      $this->module('cloud');
+      $h = $this->cloud->hetzner($token);
+
+      $ssh_key_ids = [];
+      $key_id = '';
+      $label = '';
+
+      $runner_public_key = $this->_runner_public_key();
+      if ($runner_public_key === '') {
+        $_SESSION['form_submission_errors'][] = [
+          'Runner SSH public key not found. Create ' . RUNNER_SSH_KEY . '.pub before connecting Hetzner.',
+        ];
+        $this->_show_server_hetzner($customer);
+        return;
+      }
+
+      $runner_label = 'provision-runner-' . substr(md5(BASE_URL), 0, 8);
+      $runner_key = $h->ensure_ssh_key($runner_label, $runner_public_key);
+      $key_id = $runner_key['id'];
+      $label = $runner_key['name'];
+      $ssh_key_ids[] = $runner_key['id'];
+
+      if (!empty($customer->ssh_public_key)) {
+        $customer_label = 'provision-customer-' . substr(md5($customer->email), 0, 8);
+        $customer_key = $h->ensure_ssh_key($customer_label, $customer->ssh_public_key);
+        $ssh_key_ids[] = $customer_key['id'];
+      }
+
+      $this->module('provider');
+      $this->provider->model->save_hetzner((int) $customer->id, $token, $key_id, $label, $ssh_key_ids);
+
+      redirect('customer-onboarding/configure_hetzner_server');
+      return;
+    }
+
+    $this->_show_server_hetzner($customer);
+  }
+
+  function _show_server_hetzner(object $customer): void
+  {
     $this->module('provider');
     $creds = $this->provider->model->get_hetzner((int) $customer->id);
 
     $this->view('server_hetzner', [
       'existing_token' => $creds['token'] ?? '',
     ]);
-  }
-
-  function submit_server_hetzner(): void
-  {
-    $customer = $this->_require_not_onboarded();
-
-    $this->validation->set_rules('token', 'API Token', 'required|callback_validate_hetzner_token');
-
-    if ($this->validation->run() !== true) {
-      $this->server_hetzner();
-      return;
-    }
-
-    $token = post('token', true);
-
-    $this->module('cloud');
-    $h = $this->cloud->hetzner($token);
-
-    $ssh_key_ids = [];
-    $key_id = '';
-    $label = '';
-
-    $runner_public_key = $this->_runner_public_key();
-    if ($runner_public_key === '') {
-      $_SESSION['form_submission_errors'][] = [
-        'Runner SSH public key not found. Create ' . RUNNER_SSH_KEY . '.pub before connecting Hetzner.',
-      ];
-      $this->server_hetzner();
-      return;
-    }
-
-    $runner_label = 'provision-runner-' . substr(md5(BASE_URL), 0, 8);
-    $runner_key = $h->ensure_ssh_key($runner_label, $runner_public_key);
-    $key_id = $runner_key['id'];
-    $label = $runner_key['name'];
-    $ssh_key_ids[] = $runner_key['id'];
-
-    if (!empty($customer->ssh_public_key)) {
-      $customer_label = 'provision-customer-' . substr(md5($customer->email), 0, 8);
-      $customer_key = $h->ensure_ssh_key($customer_label, $customer->ssh_public_key);
-      $ssh_key_ids[] = $customer_key['id'];
-    }
-
-    $this->module('provider');
-    $this->provider->model->save_hetzner((int) $customer->id, $token, $key_id, $label, $ssh_key_ids);
-
-    redirect('customer-onboarding/configure_hetzner_server');
   }
 
   function configure_hetzner_server(): void
@@ -444,6 +436,28 @@ class Onboarding extends Trongate
       redirect('customer-onboarding/server_hetzner');
     }
 
+    if ($this->_is_post()) {
+      $server_id = match (post('provider', true)) {
+        'hetzner'        => $this->_try_hetzner_new($customer, $env),
+        'hetzner_import' => $this->_try_hetzner_import($customer, $env),
+        default          => null,
+      };
+
+      if ($server_id === null) {
+        $this->_show_configure_hetzner_server($customer, $env);
+        return;
+      }
+
+      $_SESSION['onboarding_server_id'] = (int) $server_id;
+      redirect('customer-onboarding/provision_server');
+      return;
+    }
+
+    $this->_show_configure_hetzner_server($customer, $env);
+  }
+
+  function _show_configure_hetzner_server(object $customer, object $env): void
+  {
     try {
       $h            = $this->_hetzner_client((int) $customer->id);
       $regions      = $h->list_regions();
@@ -465,35 +479,7 @@ class Onboarding extends Trongate
     ]);
   }
 
-  function submit_configure_hetzner_server(): void
-  {
-    $customer = $this->_require_not_onboarded();
-
-    if ($this->_onboarding_provider($customer) !== 'hetzner') {
-      redirect('customer-onboarding/choose_provider');
-    }
-
-    $env = $this->model->first_environment((int) $customer->id);
-    if ($env === false) {
-      redirect('customer-onboarding/environment');
-    }
-
-    $server_id = match (post('provider', true)) {
-      'hetzner'        => $this->_try_hetzner_new($customer, $env),
-      'hetzner_import' => $this->_try_hetzner_import($customer, $env),
-      default          => null,
-    };
-
-    if ($server_id === null) {
-      $this->configure_hetzner_server();
-      return;
-    }
-
-    $_SESSION['onboarding_server_id'] = (int) $server_id;
-    redirect('customer-onboarding/provision_server');
-  }
-
-  private function _try_hetzner_new(object $customer, object $env): ?int
+  function _try_hetzner_new(object $customer, object $env): ?int
   {
     $this->validation->set_rules('name',        'server name', 'required|max_length[100]');
     $this->validation->set_rules('region',      'region',      'required');
@@ -540,7 +526,7 @@ class Onboarding extends Trongate
     return $server_id;
   }
 
-  private function _try_hetzner_import(object $customer, object $env): ?int
+  function _try_hetzner_import(object $customer, object $env): ?int
   {
     $this->validation->set_rules('name',       'server name', 'required|max_length[100]');
     $this->validation->set_rules('hetzner_id', 'server',      'required');
@@ -576,7 +562,7 @@ class Onboarding extends Trongate
     return $server_id;
   }
 
-  private function _hetzner_client(int $customer_id): Hetzner
+  function _hetzner_client(int $customer_id): Hetzner
   {
     $this->module('provider');
     $creds = $this->provider->model->get_hetzner($customer_id);
@@ -587,7 +573,7 @@ class Onboarding extends Trongate
     return $this->cloud->hetzner($creds['token']);
   }
 
-  private function _hetzner_ssh_key_ids(array $creds): array
+  function _hetzner_ssh_key_ids(array $creds): array
   {
     $ids = $creds['ssh_key_ids'] ?? [];
     if (!is_array($ids)) {
@@ -607,7 +593,7 @@ class Onboarding extends Trongate
     return $normalized;
   }
 
-  private function _runner_public_key(): string
+  function _runner_public_key(): string
   {
     if (!defined('RUNNER_SSH_KEY') || RUNNER_SSH_KEY === '') {
       return '';
@@ -659,6 +645,60 @@ class Onboarding extends Trongate
       return;
     }
 
+    if ($this->_is_post()) {
+      $action = post('action', true) === 'enable_ssl' ? 'enable_ssl' : 'skip';
+      $this->validation->set_rules('dummy', 'dummy', 'max_length[1]');
+      if ($this->validation->run() !== true) {
+        $this->_show_dns_ssl($server);
+        return;
+      }
+
+      if ($action === 'skip') {
+        $_SESSION['onboarding_dns_ssl_seen'] = 1;
+        unset($_SESSION['onboarding_ssl_retryable_failure']);
+        redirect('customer-onboarding/register_deployment');
+        return;
+      }
+
+      $error = $this->_ssl_preflight_error($server);
+      if ($error !== '') {
+        $_SESSION['form_submission_errors'][] = [$error];
+        $this->_show_dns_ssl($server);
+        return;
+      }
+
+      $script = $this->_render_certbot_script($server);
+      if (session_status() === PHP_SESSION_ACTIVE) {
+        session_write_close();
+      }
+
+      [$exit_code, $log] = $this->_run_remote_bash($server, $script);
+
+      if (session_status() !== PHP_SESSION_ACTIVE) {
+        session_start();
+      }
+
+      if ($exit_code !== 0) {
+        $_SESSION['onboarding_ssl_retryable_failure'] = 1;
+        $_SESSION['form_submission_errors'][] = [
+          $this->_ssl_failure_message($log, $exit_code),
+        ];
+        $this->_show_dns_ssl($server);
+        return;
+      }
+
+      $_SESSION['onboarding_dns_ssl_seen'] = 1;
+      unset($_SESSION['onboarding_ssl_retryable_failure']);
+      $_SESSION['flash_success'] = 'SSL enabled for ' . trim((string) $server->domain) . '.';
+      redirect('customer-onboarding/register_deployment');
+      return;
+    }
+
+    $this->_show_dns_ssl($server);
+  }
+
+  function _show_dns_ssl(object $server): void
+  {
     $this->view('dns_ssl', [
       'server' => $server,
       'domain' => trim((string) ($server->domain ?? '')),
@@ -666,67 +706,6 @@ class Onboarding extends Trongate
       'ssl_error' => $this->_ssl_preflight_error($server),
       'ssl_retryable_failure' => !empty($_SESSION['onboarding_ssl_retryable_failure']),
     ]);
-  }
-
-  function submit_dns_ssl(): void
-  {
-    $customer = $this->_require_logged_in();
-    $server = $this->_onboarding_server($customer);
-
-    if ($server === false) {
-      redirect('customer');
-      return;
-    }
-    if ($server->status !== 'active') {
-      redirect('customer-onboarding/provision_server');
-      return;
-    }
-
-    $action = post('action', true) === 'enable_ssl' ? 'enable_ssl' : 'skip';
-    $this->validation->set_rules('dummy', 'dummy', 'max_length[1]');
-    if ($this->validation->run() !== true) {
-      $this->dns_ssl();
-      return;
-    }
-
-    if ($action === 'skip') {
-      $_SESSION['onboarding_dns_ssl_seen'] = 1;
-      unset($_SESSION['onboarding_ssl_retryable_failure']);
-      redirect('customer-onboarding/register_deployment');
-      return;
-    }
-
-    $error = $this->_ssl_preflight_error($server);
-    if ($error !== '') {
-      $_SESSION['form_submission_errors'][] = [$error];
-      $this->dns_ssl();
-      return;
-    }
-
-    $script = $this->_render_certbot_script($server);
-    if (session_status() === PHP_SESSION_ACTIVE) {
-      session_write_close();
-    }
-
-    [$exit_code, $log] = $this->_run_remote_bash($server, $script);
-
-    if (session_status() !== PHP_SESSION_ACTIVE) {
-      session_start();
-    }
-
-    if ($exit_code !== 0) {
-      $_SESSION['onboarding_ssl_retryable_failure'] = 1;
-      $_SESSION['form_submission_errors'][] = [
-        $this->_ssl_failure_message($log, $exit_code),
-      ];
-      $this->dns_ssl();
-      return;
-    }
-
-    $_SESSION['onboarding_dns_ssl_seen'] = 1;
-    unset($_SESSION['onboarding_ssl_retryable_failure']);
-    $_SESSION['flash_success'] = 'SSL enabled for ' . trim((string) $server->domain) . '.';
-    redirect('customer-onboarding/register_deployment');
   }
 
   // ── Step 8: Deploy app ──────────────────────────────────────────
@@ -817,7 +796,7 @@ class Onboarding extends Trongate
     return true;
   }
 
-  private function _normalize_ssh_public_key(string $public_key): string
+  function _normalize_ssh_public_key(string $public_key): string
   {
     $parts = preg_split('/\s+/', trim($public_key));
     if ($parts === false) {
@@ -830,7 +809,7 @@ class Onboarding extends Trongate
     return $parts[0] . ' ' . $parts[1] . ' ' . implode(' ', array_slice($parts, 2));
   }
 
-  private function _ssh_key_blob_type(string $decoded): string
+  function _ssh_key_blob_type(string $decoded): string
   {
     if (strlen($decoded) < 4) {
       return '';
@@ -854,7 +833,7 @@ class Onboarding extends Trongate
 
   // ── Auth guard ──────────────────────────────────────────────────
 
-  private function _store_zip(): string|false
+  function _store_zip(): string|false
   {
     if (empty($_FILES['zip_file']['tmp_name']) || $_FILES['zip_file']['error'] !== UPLOAD_ERR_OK) {
       return false;
@@ -870,7 +849,12 @@ class Onboarding extends Trongate
     return $dest;
   }
 
-  private function _onboarding_server(object $customer): object|false
+  function _is_post(): bool
+  {
+    return ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST';
+  }
+
+  function _onboarding_server(object $customer): object|false
   {
     $server_id = (int) ($_SESSION['onboarding_server_id'] ?? 0);
     if ($server_id === 0) {
@@ -885,12 +869,12 @@ class Onboarding extends Trongate
     return $this->server->model->get($server_id, (int) $customer->id);
   }
 
-  private function _can_enable_ssl(object $server): bool
+  function _can_enable_ssl(object $server): bool
   {
     return $this->_ssl_preflight_error($server) === '';
   }
 
-  private function _ssl_preflight_error(object $server): string
+  function _ssl_preflight_error(object $server): string
   {
     $domain = trim((string) ($server->domain ?? ''));
     $email = trim((string) ($server->customer_email ?? ''));
@@ -915,7 +899,7 @@ class Onboarding extends Trongate
     return '';
   }
 
-  private function _render_certbot_script(object $server): string
+  function _render_certbot_script(object $server): string
   {
     return (string) $this->view(
       'scripts/certbot_script',
@@ -927,7 +911,7 @@ class Onboarding extends Trongate
     );
   }
 
-  private function _run_remote_bash(object $server, string $script): array
+  function _run_remote_bash(object $server, string $script): array
   {
     $user = $server->ssh_user ?: 'root';
     $port = (int) ($server->ssh_port ?: 22);
@@ -966,7 +950,7 @@ class Onboarding extends Trongate
     return [proc_close($proc), trim($output)];
   }
 
-  private function _ssl_failure_message(string $log, int $exit_code): string
+  function _ssl_failure_message(string $log, int $exit_code): string
   {
     $message = trim($log);
 
@@ -1003,12 +987,12 @@ class Onboarding extends Trongate
     return 'SSL setup failed: ' . substr($message ?: 'certbot failed.', 0, 500);
   }
 
-  private function _tail_text(string $message, int $length): string
+  function _tail_text(string $message, int $length): string
   {
     return strlen($message) > $length ? '...' . substr($message, -$length) : $message;
   }
 
-  private function _valid_domain(string $domain): bool
+  function _valid_domain(string $domain): bool
   {
     if ($domain === '' || strlen($domain) > 253) {
       return false;
@@ -1019,7 +1003,7 @@ class Onboarding extends Trongate
     );
   }
 
-  private function _require_not_onboarded(): object
+  function _require_not_onboarded(): object
   {
     $this->module('trongate_tokens');
     $token = $this->trongate_tokens->attempt_get_valid_token(2);
@@ -1032,7 +1016,7 @@ class Onboarding extends Trongate
     return $customer;
   }
 
-  private function _onboarding_provider(object $customer): ?string
+  function _onboarding_provider(object $customer): ?string
   {
     $choice = $customer->onboarding_provider ?? null;
 
@@ -1050,7 +1034,7 @@ class Onboarding extends Trongate
     return null;
   }
 
-  private function _require_logged_in(): object
+  function _require_logged_in(): object
   {
     $this->module('trongate_tokens');
     $token = $this->trongate_tokens->attempt_get_valid_token(2);

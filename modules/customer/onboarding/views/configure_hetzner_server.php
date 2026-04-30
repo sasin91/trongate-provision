@@ -34,7 +34,7 @@
     </div>
 
     <div id="tab-new" class="<?= $active_tab !== 'new' ? 'is-hidden' : '' ?>">
-        <?= form_open('customer-onboarding/submit_configure_hetzner_server') ?>
+        <?= form_open('customer-onboarding/configure_hetzner_server') ?>
         <input type="hidden" name="provider" value="hetzner">
 
         <div class="form-group">
@@ -105,7 +105,7 @@
 
     <?php if (!empty($importable)): ?>
     <div id="tab-import" class="<?= $active_tab !== 'import' ? 'is-hidden' : '' ?>">
-        <?= form_open('customer-onboarding/submit_configure_hetzner_server') ?>
+        <?= form_open('customer-onboarding/configure_hetzner_server') ?>
         <input type="hidden" name="provider" value="hetzner_import">
 
         <div class="form-group">

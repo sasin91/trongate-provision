@@ -22,7 +22,7 @@
         &middot; PHP <?= htmlspecialchars($env->php_version) ?>
     </div>
 
-    <?= form_open('customer-onboarding/submit_server_manual') ?>
+    <?= form_open('customer-onboarding/server_manual') ?>
 
     <div class="form-group">
         <label class="form-label" for="name">Server Name</label>

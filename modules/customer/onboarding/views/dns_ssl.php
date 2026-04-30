@@ -166,7 +166,7 @@ $copyable_value = static function (string $value): void {
     </div>
 
     <?php if ($domain !== ''): ?>
-        <?= form_open('customer-onboarding/submit_dns_ssl') ?>
+        <?= form_open('customer-onboarding/dns_ssl') ?>
         <input type="hidden" name="action" value="enable_ssl">
         <button type="submit" class="btn-primary" <?= $can_enable_ssl ? '' : 'disabled' ?>>
             <div class="spinner"></div>
@@ -175,7 +175,7 @@ $copyable_value = static function (string $value): void {
         <?= form_close() ?>
     <?php endif; ?>
 
-    <?= form_open('customer-onboarding/submit_dns_ssl', ['class' => 'secondary-action-form']) ?>
+    <?= form_open('customer-onboarding/dns_ssl', ['class' => 'secondary-action-form']) ?>
     <input type="hidden" name="action" value="skip">
     <button type="submit" class="btn-secondary-onboarding">
         <?= $domain === '' || !empty($ssl_retryable_failure) ? 'Continue to Deployment Setup' : 'Skip SSL for Now' ?> &#10148;

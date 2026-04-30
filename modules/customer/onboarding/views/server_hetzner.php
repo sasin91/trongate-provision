@@ -49,7 +49,7 @@
         </ol>
     </div>
 
-    <?= form_open('customer-onboarding/submit_server_hetzner') ?>
+    <?= form_open('customer-onboarding/server_hetzner') ?>
 
     <div class="form-group">
         <label class="form-label" for="token">Hetzner API Token</label>

@@ -17,7 +17,7 @@
 
     <?= validation_errors('<div class="error-message">', '</div>') ?>
 
-    <?= form_open('customer-onboarding/submit_ssh_key') ?>
+    <?= form_open('customer-onboarding/ssh_key') ?>
 
     <div class="form-group">
         <label class="form-label">SSH Public Key</label>
