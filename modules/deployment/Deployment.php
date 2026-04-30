@@ -169,6 +169,7 @@ class Deployment extends Trongate
     }
 
     $script = $this->_render_deploy_script($deployment);
+    $display_script = $this->_redact_deploy_script($script);
 
     $this->module("environment-services");
     $services = $this->services->model->by_environment(
@@ -196,7 +197,7 @@ class Deployment extends Trongate
       "page_title" => "Deployment #" . $id,
       "current_email" => $customer->email,
       "deployment" => $deployment,
-      "deploy_script" => $script,
+      "deploy_script" => $display_script,
       "services" => $services,
       "deploy_scripts" => $deploy_scripts,
       "recent_events" => $recent_events,
@@ -563,6 +564,50 @@ class Deployment extends Trongate
       ],
       true,
     );
+  }
+
+  /**
+   * Removes secret values from the script preview shown in the browser.
+   * The stream deploy path renders a fresh unredacted script server-side.
+   */
+  private function _redact_deploy_script(string $script): string
+  {
+    $lines = preg_split("/\r\n|\n|\r/", $script);
+    if ($lines === false) {
+      return $script;
+    }
+
+    $redacted = [];
+    foreach ($lines as $line) {
+      if (preg_match('/^export\s+([A-Z0-9_]+)=/', $line, $matches) === 1) {
+        $key = $matches[1];
+        if ($this->_is_sensitive_script_key($key)) {
+          $redacted[] = "export {$key}='[redacted]'";
+          continue;
+        }
+      }
+
+      $line = preg_replace(
+        "/^(\\s*'(?:user|password)'\\s*=>\\s*)'[^']*'(,?\\s*)$/",
+        "$1'[redacted]'$2",
+        $line,
+      );
+      $redacted[] = $line ?? "";
+    }
+
+    return implode("\n", $redacted);
+  }
+
+  private function _is_sensitive_script_key(string $key): bool
+  {
+    if ($key === "DB_USER") {
+      return true;
+    }
+
+    return preg_match(
+      '/(?:PASSWORD|PASS|SECRET|TOKEN|PRIVATE_KEY|API_KEY|ACCESS_KEY)/',
+      $key,
+    ) === 1;
   }
 
   private function _env_server_allowed(

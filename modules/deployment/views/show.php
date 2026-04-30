@@ -113,7 +113,7 @@
 <div class="card">
     <div class="card-header">
         <div>
-            <span class="card-title">Deployment Script</span>
+            <span class="card-title">Deployment Script Preview</span>
             <?php if (!empty($deployment->script_name)): ?>
                 <span style="margin-left:.6rem;font-size:.78rem;color:#6366f1">using: <strong><?= htmlspecialchars($deployment->script_name) ?></strong></span>
             <?php else: ?>
@@ -144,8 +144,8 @@
         <div class="code-block" id="deploy-script"><?= htmlspecialchars($deploy_script) ?></div>
     </div>
     <div style="padding:.75rem 1.25rem;border-top:1px solid #e2e8f0;font-size:.8rem;color:#64748b">
-        Run this script as root on <strong><?= htmlspecialchars($deployment->server_name) ?></strong> after LAMP provisioning is complete.
-        Then click <strong>Mark as Successful</strong> above.
+        Secret values are redacted in this browser preview. Use <strong>Deploy</strong> to run the unredacted script server-side on <strong><?= htmlspecialchars($deployment->server_name) ?></strong>.
+        For manual deployments, use the environment variables screen to copy credentials directly.
     </div>
 </div>
 

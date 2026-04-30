@@ -43,7 +43,7 @@ _patch_define "<?= $webroot ?>/config/site_owner.php"  'OUR_ADDRESS'       "${PR
 _patch_define "<?= $webroot ?>/config/site_owner.php"  'OUR_EMAIL_ADDRESS' "${PROVISION_OUR_EMAIL:-}"
 
 <?php if ($db): ?>
-cat <<'EOF' >> "<?= $webroot ?>/config/database.php"
+cat <<'EOF' > "<?= $webroot ?>/config/database.php"
 <?= "<" . "?php" ?>
 
 $databases = [
