@@ -210,59 +210,56 @@ class Deployment extends Trongate
   function stream(): void
   {
     $id = (int) segment(3);
+    $this->module("stream");
+    $this->stream->start();
+    $emit = function (string $line, string $event = ""): void {
+      $this->stream->emit($line, $event);
+    };
 
-    // Auth before any output — SSE can't use redirects
     $this->module("trongate_tokens");
     $token = $this->trongate_tokens->attempt_get_valid_token(
       Customer::CUSTOMER_LEVEL,
     );
     if ($token === false) {
       http_response_code(401);
+      $emit("Unauthorized.");
+      $this->stream->done(["status" => "failed"]);
       exit();
     }
     $this->module("customer");
     $customer = $this->customer->model->_get_current_customer();
-    $is_onboarding_deployment = (int) ($_SESSION["onboarding_deployment_id"] ?? 0) === $id;
-    if ($customer === false || (empty($customer->onboarded_at) && !$is_onboarding_deployment)) {
+
+    if ($customer === false) {
       http_response_code(401);
+      $emit("Unauthorized.");
+      $this->stream->done(["status" => "failed"]);
       exit();
     }
 
     $d = $this->model->get($id, (int) $customer->id);
     if ($d === false) {
       http_response_code(404);
+      $emit("Deployment not found.");
+      $this->stream->done(["status" => "failed"]);
+      exit();
+    }
+
+    $is_onboarding_deployment = (int) ($customer->onboarding_server_id ?? 0) === (int) $d->server_id;
+    if (empty($customer->onboarded_at) && !$is_onboarding_deployment) {
+      http_response_code(401);
+      $emit("Unauthorized for this onboarding deployment.");
+      $this->stream->done(["status" => "failed"]);
       exit();
     }
 
     if (!defined("RUNNER_SSH_KEY") || !RUNNER_SSH_KEY) {
       http_response_code(503);
-      echo "RUNNER_SSH_KEY is not configured.";
+      $emit("RUNNER_SSH_KEY is not configured.");
+      $this->stream->done(["status" => "failed"]);
       exit();
     }
 
-    if (session_status() === PHP_SESSION_ACTIVE) {
-      session_write_close();
-    }
-
-    // SSE setup
-    header("Content-Type: text/event-stream");
-    header("Cache-Control: no-cache");
-    header("X-Accel-Buffering: no");
-    header("Connection: keep-alive");
-    ini_set("output_buffering", "Off");
-    ini_set("zlib.output_compression", "Off");
-    set_time_limit(0);
-    while (ob_get_level() > 0) {
-      ob_end_clean();
-    }
-
-    $emit = static function (string $line, string $event = ""): void {
-      if ($event !== "") {
-        echo "event: {$event}\n";
-      }
-      echo "data: " . $line . "\n\n";
-      flush();
-    };
+    $this->stream->prepare_long_running();
 
     $user = $d->ssh_user ?: "root";
     $port = (int) ($d->ssh_port ?: 22);
@@ -270,19 +267,19 @@ class Deployment extends Trongate
     // Validate before touching DB state
     if (!filter_var($d->ip_address, FILTER_VALIDATE_IP)) {
       $emit("Invalid server IP address.");
-      $emit(json_encode(["status" => "failed", "sha" => null]), "done");
+      $this->stream->done(["status" => "failed", "sha" => null]);
       return;
     }
     if (!preg_match('/^[a-z_][a-z0-9_.-]{0,31}$/i', $user)) {
       $emit("Invalid SSH user.");
-      $emit(json_encode(["status" => "failed", "sha" => null]), "done");
+      $this->stream->done(["status" => "failed", "sha" => null]);
       return;
     }
 
     // Concurrent guard — prevent double-deploy
     if ($d->status === "running") {
       $emit("Deployment is already running.");
-      $emit(json_encode(["status" => "running", "sha" => null]), "done");
+      $this->stream->done(["status" => "running", "sha" => null]);
       return;
     }
 
@@ -317,7 +314,7 @@ class Deployment extends Trongate
       if ($scp_code !== 0) {
         $msg = "SCP failed: " . implode("\n", $scp_out);
         $emit($msg);
-        $emit(json_encode(["status" => "failed", "sha" => null]), "done");
+        $this->stream->done(["status" => "failed", "sha" => null]);
         $this->model->finish($id, "failed", $msg, null);
         $this->_emit("DeploymentFailed", "deployment", $id, [
           "reason" => "scp_failed",
@@ -357,7 +354,7 @@ class Deployment extends Trongate
     );
     if (!is_resource($proc)) {
       $emit("Failed to open SSH connection.");
-      $emit(json_encode(["status" => "failed", "sha" => null]), "done");
+      $this->stream->done(["status" => "failed", "sha" => null]);
       $this->model->finish($id, "failed", "proc_open failed.", null);
       return;
     }
@@ -380,8 +377,7 @@ class Deployment extends Trongate
         break;
       }
       if ($n === 0) {
-        echo ": ping\n\n";
-        flush();
+        $this->stream->ping();
         continue;
       }
 
@@ -436,7 +432,7 @@ class Deployment extends Trongate
       ]);
     }
 
-    $emit(json_encode(["status" => $status, "sha" => $sha]), "done");
+    $this->stream->done(["status" => $status, "sha" => $sha]);
   }
 
   function assign_script(): void

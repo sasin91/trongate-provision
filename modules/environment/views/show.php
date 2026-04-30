@@ -106,7 +106,7 @@
                             <td><a href="environment-services/show/<?= $s->id ?>" style="color:#6366f1;font-weight:600;text-decoration:none"><?= htmlspecialchars($s->name) ?></a></td>
                             <td><span class="badge badge-development"><?= htmlspecialchars($type_defaults[$s->type]['label'] ?? ucfirst($s->type)) ?></span></td>
                             <td><code style="font-size:.82rem"><?= htmlspecialchars($s->host) ?>:<?= (int) $s->port ?></code></td>
-                            <td><span class="badge badge-<?= htmlspecialchars($s->status === 'running' ? 'active' : $s->status) ?>"><?= htmlspecialchars($s->status) ?></span></td>
+                            <td><span class="badge badge-<?= htmlspecialchars($s->status) ?>"><?= htmlspecialchars($s->status) ?></span></td>
                             <td>
                                 <div class="actions-row">
                                     <?= form_open('server-health/check/service/' . $s->id, ['style' => 'display:inline;margin:0']) ?>

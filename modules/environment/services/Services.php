@@ -113,7 +113,7 @@ class Services extends Trongate
     $this->templates->customer($data);
   }
 
-  function mark_running(): void
+  function mark_active(): void
   {
     $id = (int) segment(3);
     $customer = $this->_require_customer();
@@ -125,12 +125,12 @@ class Services extends Trongate
     $s = $this->model->get($id, (int) $customer->id);
     if ($s !== false) {
       $old_status = $s->status;
-      $this->model->update_status($id, 'running');
+      $this->model->update_status($id, 'active');
       $this->_emit('ServiceStatusChanged', 'service', $id, [
         'from' => $old_status,
-        'to'   => 'running',
+        'to'   => 'active',
       ]);
-      $_SESSION['flash_success'] = 'Service marked as running.';
+      $_SESSION['flash_success'] = 'Service marked as active.';
     }
     redirect('environment-services/show/' . $id);
   }

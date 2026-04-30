@@ -701,13 +701,10 @@ class Onboarding extends Trongate
 
   function ssl_stream(): void
   {
-    $this->_start_event_stream();
-    $emit = static function (string $line, string $event = ''): void {
-      if ($event !== '') {
-        echo "event: {$event}\n";
-      }
-      echo 'data: ' . $line . "\n\n";
-      flush();
+    $this->module('stream');
+    $this->stream->start();
+    $emit = function (string $line, string $event = ''): void {
+      $this->stream->emit($line, $event);
     };
 
     $customer = $this->_require_logged_in();
@@ -715,27 +712,24 @@ class Onboarding extends Trongate
 
     if ($server === false) {
       $emit('Server not found.');
-      $emit(json_encode(['status' => 'failed']), 'done');
+      $this->stream->done(['status' => 'failed']);
       return;
     }
 
     if ($server->status !== 'active') {
       $emit('Provision the server before enabling SSL.');
-      $emit(json_encode(['status' => 'failed']), 'done');
+      $this->stream->done(['status' => 'failed']);
       return;
     }
 
     $error = $this->_ssl_preflight_error($server);
     if ($error !== '') {
       $emit($error);
-      $emit(json_encode(['status' => 'failed']), 'done');
+      $this->stream->done(['status' => 'failed']);
       return;
     }
 
-    if (session_status() === PHP_SESSION_ACTIVE) {
-      session_write_close();
-    }
-    ignore_user_abort(true);
+    $this->stream->prepare_long_running();
 
     $emit('Starting SSL setup for ' . trim((string) $server->domain) . '...');
     [$exit_code, $log] = $this->_run_remote_bash_stream(
@@ -746,13 +740,13 @@ class Onboarding extends Trongate
 
     if ($exit_code !== 0) {
       $emit($this->_ssl_failure_message($log, $exit_code));
-      $emit(json_encode(['status' => 'failed']), 'done');
+      $this->stream->done(['status' => 'failed']);
       return;
     }
 
     $this->_mark_dns_ssl_seen($customer);
     $emit('SSL setup complete.');
-    $emit(json_encode(['status' => 'success']), 'done');
+    $this->stream->done(['status' => 'success']);
   }
 
   // ── Step 8: Deploy app ──────────────────────────────────────────
@@ -1059,8 +1053,7 @@ class Onboarding extends Trongate
         break;
       }
       if ($n === 0) {
-        echo ": ssl-ping\n\n";
-        flush();
+        $this->stream->ping('ssl-ping');
         continue;
       }
 
@@ -1094,14 +1087,6 @@ class Onboarding extends Trongate
     fclose($pipes[2]);
 
     return [proc_close($proc), trim($log)];
-  }
-
-  function _start_event_stream(): void
-  {
-    header('Content-Type: text/event-stream');
-    header('Cache-Control: no-cache');
-    header('X-Accel-Buffering: no');
-    header('Connection: keep-alive');
   }
 
   function _ssl_failure_message(string $log, int $exit_code): string

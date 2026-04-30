@@ -464,13 +464,10 @@ class Server extends Trongate
   function stream(): void
   {
     $id = (int) segment(3);
-    $this->_start_event_stream();
-    $emit = static function (string $line, string $event = ""): void {
-      if ($event !== "") {
-        echo "event: {$event}\n";
-      }
-      echo "data: " . $line . "\n\n";
-      flush();
+    $this->module("stream");
+    $this->stream->start();
+    $emit = function (string $line, string $event = ""): void {
+      $this->stream->emit($line, $event);
     };
 
     $this->module("trongate_tokens");
@@ -480,7 +477,7 @@ class Server extends Trongate
     if ($token === false) {
       http_response_code(401);
       $emit("Unauthorized.");
-      $emit(json_encode(["status" => "failed"]), "done");
+      $this->stream->done(["status" => "failed"]);
       exit();
     }
     $this->module("customer");
@@ -488,7 +485,7 @@ class Server extends Trongate
     if ($customer === false) {
       http_response_code(401);
       $emit("Unauthorized.");
-      $emit(json_encode(["status" => "failed"]), "done");
+      $this->stream->done(["status" => "failed"]);
       exit();
     }
 
@@ -496,7 +493,7 @@ class Server extends Trongate
     if (empty($customer->onboarded_at) && !$is_onboarding_server) {
       http_response_code(401);
       $emit("Unauthorized for this onboarding server.");
-      $emit(json_encode(["status" => "failed"]), "done");
+      $this->stream->done(["status" => "failed"]);
       exit();
     }
 
@@ -504,52 +501,42 @@ class Server extends Trongate
     if ($s === false) {
       http_response_code(404);
       $emit("Server not found.");
-      $emit(json_encode(["status" => "failed"]), "done");
+      $this->stream->done(["status" => "failed"]);
       exit();
     }
 
     if (!defined("RUNNER_SSH_KEY") || !RUNNER_SSH_KEY) {
       http_response_code(503);
       $emit("RUNNER_SSH_KEY is not configured.");
-      $emit(json_encode(["status" => "failed"]), "done");
+      $this->stream->done(["status" => "failed"]);
       exit();
     }
 
-    if (session_status() === PHP_SESSION_ACTIVE) {
-      session_write_close();
-    }
-
-    ignore_user_abort(true);
-    ini_set("output_buffering", "Off");
-    ini_set("zlib.output_compression", "Off");
-    set_time_limit(0);
-    while (ob_get_level() > 0) {
-      ob_end_clean();
-    }
+    $this->stream->prepare_long_running();
 
     $user = $s->ssh_user ?: "root";
     $port = (int) ($s->ssh_port ?: 22);
 
     if (!filter_var($s->ip_address, FILTER_VALIDATE_IP)) {
       $emit("Invalid server IP address.");
-      $emit(json_encode(["status" => "failed"]), "done");
+      $this->stream->done(["status" => "failed"]);
       return;
     }
     if (!preg_match('/^[a-z_][a-z0-9_.-]{0,31}$/i', $user)) {
       $emit("Invalid SSH user.");
-      $emit(json_encode(["status" => "failed"]), "done");
+      $this->stream->done(["status" => "failed"]);
       return;
     }
     if (!$this->model->mark_provisioning($id)) {
       if (($s->status ?? "") === "active") {
         $emit("Server is already provisioned and active.");
-        $emit(json_encode(["status" => "active"]), "done");
+        $this->stream->done(["status" => "active"]);
         return;
       }
 
       if (($s->status ?? "") === "failed") {
         $emit("Previous provisioning attempt failed.");
-        $emit(json_encode(["status" => "failed"]), "done");
+        $this->stream->done(["status" => "failed"]);
         return;
       }
 
@@ -635,7 +622,7 @@ class Server extends Trongate
       );
       if (!is_resource($proc)) {
         $emit("Failed to open SSH connection.");
-        $emit(json_encode(["status" => "failed"]), "done");
+        $this->stream->done(["status" => "failed"]);
         $this->model->mark_result($id, "failed");
         return;
       }
@@ -658,8 +645,7 @@ class Server extends Trongate
           break;
         }
         if ($n === 0) {
-          echo ": ping\n\n";
-          flush();
+          $this->stream->ping();
           continue;
         }
 
@@ -710,8 +696,7 @@ class Server extends Trongate
       $emit("SSH is still unavailable; waiting {$retry_delay} seconds…");
       for ($waited = 0; $waited < $retry_delay; $waited += 5) {
         sleep(min(5, $retry_delay - $waited));
-        echo ": waiting-for-ssh\n\n";
-        flush();
+        $this->stream->ping("waiting-for-ssh");
       }
     }
 
@@ -726,7 +711,7 @@ class Server extends Trongate
         "to" => "active",
         "source" => "stream",
       ]);
-      $emit(json_encode(["status" => "active"]), "done");
+      $this->stream->done(["status" => "active"]);
     } else {
       $this->model->mark_result($id, "failed");
       $this->_emit("ServerStatusChanged", "server", $id, [
@@ -734,16 +719,8 @@ class Server extends Trongate
         "to" => "failed",
         "source" => "stream",
       ]);
-      $emit(json_encode(["status" => "failed"]), "done");
+      $this->stream->done(["status" => "failed"]);
     }
-  }
-
-  function _start_event_stream(): void
-  {
-    header("Content-Type: text/event-stream");
-    header("Cache-Control: no-cache");
-    header("X-Accel-Buffering: no");
-    header("Connection: keep-alive");
   }
 
   function _wait_for_existing_provisioning(int $id, int $customer_id, callable $emit): void
@@ -759,22 +736,21 @@ class Server extends Trongate
       $server = $this->model->get($id, $customer_id);
       if ($server === false) {
         $emit("Server not found.");
-        $emit(json_encode(["status" => "failed"]), "done");
+        $this->stream->done(["status" => "failed"]);
         return;
       }
 
       if ($server->status === "active" || $server->status === "failed") {
-        $emit(json_encode(["status" => $server->status]), "done");
+        $this->stream->done(["status" => $server->status]);
         return;
       }
 
-      echo ": waiting-for-existing-provision\n\n";
-      flush();
+      $this->stream->ping("waiting-for-existing-provision");
     }
 
     $this->model->mark_result($id, "failed");
     $emit("Provisioning did not finish after the browser reconnected. Restarting provisioning.");
-    $emit(json_encode(["status" => "retry"]), "done");
+    $this->stream->done(["status" => "retry"]);
   }
 
   function mark_active(): void

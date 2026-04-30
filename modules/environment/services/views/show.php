@@ -11,9 +11,9 @@
         <?= form_open('server-health/check/service/' . $service->id, ['style' => 'display:inline;margin:0']) ?>
         <button type="submit" class="btn btn-secondary">&#10003; Check Health</button>
         <?= form_close() ?>
-        <?php if ($service->status !== 'running'): ?>
-            <?= form_open('environment-services/mark_running/' . $service->id, ['style' => 'display:inline;margin:0']) ?>
-            <button type="submit" class="btn btn-primary">Mark as Running</button>
+        <?php if ($service->status !== 'active'): ?>
+            <?= form_open('environment-services/mark_active/' . $service->id, ['style' => 'display:inline;margin:0']) ?>
+            <button type="submit" class="btn btn-primary">Mark as Active</button>
             <?= form_close() ?>
         <?php endif; ?>
         <?= form_open('environment-services/delete/' . $service->id, ['style' => 'display:inline;margin:0']) ?>
@@ -34,7 +34,7 @@
             $hs = $latest_health->status ?? 'unknown';
             $badge = match($hs) { 'healthy' => 'active', 'unhealthy' => 'failed', default => 'pending' };
             ?>
-            <span class="badge badge-<?= htmlspecialchars($service->status === 'running' ? 'active' : $service->status) ?>"><?= htmlspecialchars($service->status) ?></span>
+            <span class="badge badge-<?= htmlspecialchars($service->status) ?>"><?= htmlspecialchars($service->status) ?></span>
         </span>
     </div>
     <div class="detail-item">
