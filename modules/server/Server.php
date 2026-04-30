@@ -191,6 +191,7 @@ class Server extends Trongate
       "customer_id" => (int) $customer->id,
       "name" => $name,
       "ip_address" => $result["ipv4"],
+      "ipv6_address" => $result["ipv6"] ?? null,
       "ssh_user" => "root",
       "ssh_port" => 22,
       "provider" => "hetzner",
@@ -243,6 +244,7 @@ class Server extends Trongate
       "customer_id" => (int) $customer->id,
       "name" => post("name", true),
       "ip_address" => $remote["ip"],
+      "ipv6_address" => $remote["ipv6"] ?? null,
       "ssh_user" => "root",
       "ssh_port" => 22,
       "provider" => "hetzner",
@@ -312,14 +314,19 @@ class Server extends Trongate
         if (
           $remote &&
           !empty($remote["ip"]) &&
-          $server->ip_address !== $remote["ip"]
+          (
+            $server->ip_address !== $remote["ip"] ||
+            ($server->ipv6_address ?? null) !== ($remote["ipv6"] ?? null)
+          )
         ) {
           $server->ip_address = $remote["ip"];
+          $server->ipv6_address = $remote["ipv6"] ?? null;
           $server->status = "active";
           $this->db->update(
             $id,
             [
               "ip_address" => $remote["ip"],
+              "ipv6_address" => $remote["ipv6"] ?? null,
               "status" => "active",
             ],
             "server",
@@ -468,7 +475,8 @@ class Server extends Trongate
     }
     $this->module("customer");
     $customer = $this->customer->model->_get_current_customer();
-    if ($customer === false || empty($customer->onboarded_at)) {
+    $is_onboarding_server = (int) ($_SESSION["onboarding_server_id"] ?? 0) === $id;
+    if ($customer === false || (empty($customer->onboarded_at) && !$is_onboarding_server)) {
       http_response_code(401);
       exit();
     }
@@ -798,7 +806,7 @@ class Server extends Trongate
       ]);
     } else {
       $_SESSION["flash_error"] =
-        "SSL setup failed: " . substr(trim($log) ?: "certbot failed.", 0, 500);
+        $this->_ssl_failure_message($log, $exit_code);
       $this->_emit("ServerSslFailed", "server", $id, [
         "domain" => $domain,
         "exit_code" => $exit_code,
@@ -898,6 +906,48 @@ class Server extends Trongate
     fclose($pipes[1]);
 
     return [proc_close($proc), trim($output)];
+  }
+
+  private function _ssl_failure_message(string $log, int $exit_code): string
+  {
+    $message = trim($log);
+
+    if ($exit_code === 124) {
+      return "SSL setup failed: the remote setup timed out before finishing. Check whether apt, Apache, or certbot is still running on the server, then try again.";
+    }
+
+    if (preg_match('/SUDO_DENIED_COMMAND=([^\r\n]+)/', $message, $matches)) {
+      return "SSL setup failed: passwordless sudo is missing for `" . trim($matches[1]) . "`. Add that command to /etc/sudoers.d/provision, then try again.";
+    }
+
+    if (stripos($message, "requires root privileges") !== false ||
+      (stripos($message, "permission denied") !== false && stripos($message, "apt") !== false)
+    ) {
+      return "SSL setup failed: the SSH user needs root privileges to install certbot. Connect as root or configure passwordless sudo, then try again.";
+    }
+
+    if ($exit_code === 13) {
+      return "SSL setup failed: sudo rejected one of the required commands. Details: " . $this->_tail_text($message ?: "No remote sudo output was captured.", 800);
+    }
+
+    if (stripos($message, "Timed out waiting for apt/dpkg locks") !== false ||
+      $exit_code === 75 ||
+      stripos($message, "Could not get lock") !== false ||
+      stripos($message, "Unable to lock directory") !== false
+    ) {
+      return "SSL setup failed: another apt/dpkg process is still running on the server. Wait a few minutes, then try again.";
+    }
+
+    if ($message === "") {
+      return "SSL setup failed with exit code " . $exit_code . " before producing output. Retry once; if it repeats, run certbot manually on the server to see the underlying error.";
+    }
+
+    return "SSL setup failed: " . substr($message ?: "certbot failed.", 0, 500);
+  }
+
+  private function _tail_text(string $message, int $length): string
+  {
+    return strlen($message) > $length ? "..." . substr($message, -$length) : $message;
   }
 
   private function _valid_domain(string $domain): bool

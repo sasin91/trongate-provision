@@ -33,7 +33,7 @@
         </div>
         <div class="what-happens-item">
             <span class="check">&#10148;</span>
-            <span>You'll reach the dashboard where you can <strong>provision a Hetzner server</strong> in seconds</span>
+            <span>Next you'll choose or create the <strong>Hetzner server</strong> to provision with IPv4 and IPv6 enabled</span>
         </div>
     </div>
 
@@ -79,7 +79,7 @@
     <?= form_close() ?>
 
     <p class="onboarding-footer-note">
-        Step 5 of 9 &mdash;
+        Step 4 of 8 &mdash;
         <a href="customer-onboarding/choose_provider">&#8592; Back</a>
     </p>
 </div>

@@ -74,7 +74,7 @@ class Hetzner extends Client {
         return [
             'provider_id' => (string) $server['id'],
             'ipv4' => $server['public_net']['ipv4']['ip'] ?? '',
-            'ipv6' => $server['public_net']['ipv6']['ip'] ?? '',
+            'ipv6' => $this->_single_ipv6_address($server['public_net']['ipv6']['ip'] ?? ''),
             'status' => $this->_map_status($server['status']),
             'image' => $server['image']['name'],
             'type' => $server['server_type']['name'],
@@ -90,6 +90,7 @@ class Hetzner extends Client {
             return [
                 'provider_id' => (string) $server['id'],
                 'ip' => $server['public_net']['ipv4']['ip'] ?? '',
+                'ipv6' => $this->_single_ipv6_address($server['public_net']['ipv6']['ip'] ?? ''),
                 'status' => $this->_map_status($server['status']),
                 'type' => $server['server_type']['name'],
                 'region' => $server['datacenter']['location']['name'],
@@ -219,6 +220,7 @@ class Hetzner extends Client {
                 'id'     => (string) $s['id'],
                 'name'   => $s['name'],
                 'ip'     => $s['public_net']['ipv4']['ip'] ?? '',
+                'ipv6'   => $this->_single_ipv6_address($s['public_net']['ipv6']['ip'] ?? ''),
                 'type'   => $s['server_type']['name'],
                 'region' => $s['datacenter']['location']['name'],
                 'status' => $this->_map_status($s['status']),
@@ -283,6 +285,39 @@ class Hetzner extends Client {
         ];
 
         return $map[$status] ?? 'unknown';
+    }
+
+    private function _single_ipv6_address(string $value): string {
+        $value = trim($value);
+        if ($value === '') {
+            return '';
+        }
+
+        $parts = explode('/', $value, 2);
+        $address = $parts[0];
+        if (!filter_var($address, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
+            return '';
+        }
+
+        if (!isset($parts[1]) || (int) $parts[1] >= 128) {
+            return $address;
+        }
+
+        $packed = inet_pton($address);
+        if ($packed === false) {
+            return '';
+        }
+
+        $bytes = array_values(unpack('C*', $packed));
+        for ($i = count($bytes) - 1; $i >= 0; $i--) {
+            $bytes[$i]++;
+            if ($bytes[$i] <= 255) {
+                break;
+            }
+            $bytes[$i] = 0;
+        }
+
+        return inet_ntop(pack('C*', ...$bytes)) ?: $address;
     }
 
     /**

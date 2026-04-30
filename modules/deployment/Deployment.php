@@ -222,7 +222,8 @@ class Deployment extends Trongate
     }
     $this->module("customer");
     $customer = $this->customer->model->_get_current_customer();
-    if ($customer === false || empty($customer->onboarded_at)) {
+    $is_onboarding_deployment = (int) ($_SESSION["onboarding_deployment_id"] ?? 0) === $id;
+    if ($customer === false || (empty($customer->onboarded_at) && !$is_onboarding_deployment)) {
       http_response_code(401);
       exit();
     }

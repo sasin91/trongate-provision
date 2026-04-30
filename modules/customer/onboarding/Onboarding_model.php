@@ -22,6 +22,10 @@ class Onboarding_model extends Model {
         $this->db->update($customer_id, ['ssh_public_key' => trim($public_key)], 'customer');
     }
 
+    function save_onboarding_provider(int $customer_id, string $provider): void {
+        $this->db->update($customer_id, ['onboarding_provider' => $provider], 'customer');
+    }
+
     function has_ssh_key(int $customer_id): bool {
         $rows = $this->db->query_bind(
             "SELECT 1 FROM customer WHERE id = :id AND ssh_public_key IS NOT NULL AND ssh_public_key != '' LIMIT 1",

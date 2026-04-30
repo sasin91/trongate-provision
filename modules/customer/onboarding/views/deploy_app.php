@@ -56,7 +56,6 @@
             <div class="step-dot completed"></div>
             <div class="step-dot completed"></div>
             <div class="step-dot completed"></div>
-            <div class="step-dot completed"></div>
             <div class="step-dot active"></div>
         </div>
         <a href="customer" class="btn-primary">Go to Dashboard &#10148;</a>
@@ -67,7 +66,7 @@
     </div>
 
     <p style="text-align:center;margin-top:1.25rem;font-size:.8rem;color:#9ca3af">
-        Step 9 of 9 &mdash;
+        Step 8 of 8 &mdash;
         <a href="customer" style="color:#9ca3af">Go to Dashboard</a>
     </p>
 </div>
@@ -88,9 +87,18 @@
     es.addEventListener('done', function (e) {
         es.close();
         var result = JSON.parse(e.data);
-        msg.textContent = result.status === 'success'
-            ? '✓ Deployment complete!'
-            : '✗ Deployment failed — you can retry from the deployment page.';
+        if (result.status === 'success') {
+            msg.textContent = '✓ Deployment complete!';
+            fetch('<?= BASE_URL ?>customer-onboarding/complete', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {'X-Requested-With': 'XMLHttpRequest'}
+            }).catch(function () {
+                msg.textContent = 'Deployment complete. Refresh once before opening the dashboard.';
+            });
+        } else {
+            msg.textContent = '✗ Deployment failed — you can retry from the deployment page.';
+        }
         finish.style.display = '';
     });
 

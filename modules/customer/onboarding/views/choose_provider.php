@@ -56,7 +56,7 @@
     <?= form_close() ?>
 
     <p class="onboarding-footer-note">
-        Step 4 of 9 &mdash; <a href="customer-onboarding/environment">&#8592; Back</a>
+        Step 3 of 8 &mdash; <a href="customer-onboarding/environment">&#8592; Back</a>
     </p>
 </div>
 

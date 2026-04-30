@@ -32,11 +32,16 @@
 </head>
 <body>
 
+<?php $server_ipv6 = trim((string) ($server->ipv6_address ?? '')); ?>
+
 <div class="onboarding-card" style="max-width:560px">
     <div class="onboarding-header">
         <h1>&#9881; Provisioning Server</h1>
-        <p>Installing the LAMP stack on <strong><?= htmlspecialchars($server->name) ?></strong>
-           (<code><?= htmlspecialchars($server->ip_address) ?></code>). This takes a few minutes.</p>
+        <p>
+            Installing the LAMP stack on <strong><?= htmlspecialchars($server->name) ?></strong>
+            (<code><?= htmlspecialchars($server->ip_address) ?></code><?php if ($server_ipv6 !== ''): ?>,
+            <code><?= htmlspecialchars($server_ipv6) ?></code><?php endif; ?>). This takes a few minutes.
+        </p>
     </div>
 
     <pre id="log-pre">Connecting…</pre>
@@ -60,7 +65,7 @@
     </div>
 
     <p style="text-align:center;margin-top:1.25rem;font-size:.8rem;color:#9ca3af">
-        Step 7 of 9 &mdash;
+        Step 5 of 8 &mdash;
         <a href="customer" style="color:#9ca3af">Skip to Dashboard</a>
     </p>
 </div>
@@ -76,7 +81,7 @@
         msg.textContent = ok
             ? '✓ Provisioning complete!'
             : '✗ Provisioning failed — you can retry from the server page.';
-        if (!ok) nextBtn.textContent = 'Continue to Deploy ↠';
+        if (!ok) nextBtn.textContent = 'Continue to DNS & SSL ↠';
         next.style.display = '';
     }
 

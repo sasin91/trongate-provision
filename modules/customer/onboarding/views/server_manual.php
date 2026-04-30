@@ -60,7 +60,7 @@
     <?= form_close() ?>
 
     <p class="onboarding-footer-note">
-        Step 5 of 9 &mdash;
+        Step 4 of 8 &mdash;
         <a href="customer-onboarding/choose_provider">&#8592; Back</a>
     </p>
 </div>

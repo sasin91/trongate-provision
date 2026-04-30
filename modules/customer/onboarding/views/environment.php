@@ -154,7 +154,7 @@
     <?= form_close() ?>
 
     <p style="text-align:center;margin-top:1.25rem;font-size:0.8rem;color:#9ca3af">
-        Step 2 of 9 &mdash; <a href="customer-onboarding/ssh_key" style="color:#9ca3af">&#8592; Back</a>
+        Step 2 of 8 &mdash; <a href="customer-onboarding/ssh_key" style="color:#9ca3af">&#8592; Back</a>
     </p>
 </div>
 

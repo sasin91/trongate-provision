@@ -106,7 +106,7 @@
                     : '✗ Provisioning failed — you can retry from the server page.';
             }
             if (!ok && nextButton) {
-                nextButton.textContent = 'Continue to Deploy ↠';
+                nextButton.textContent = 'Continue to DNS & SSL ↠';
             }
             showStreamPanel(panel);
         }

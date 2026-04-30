@@ -24,9 +24,15 @@ chmod 700 "/home/$PROVISION_USER/.ssh"
 chmod 600 "/home/$PROVISION_USER/.ssh/authorized_keys" 2>/dev/null || true
 
 cat > "/etc/sudoers.d/$PROVISION_USER" << SUDOEOF
+$PROVISION_USER ALL=(ALL) NOPASSWD: /usr/bin/apt-get *
+$PROVISION_USER ALL=(ALL) NOPASSWD: /usr/bin/fuser *
+$PROVISION_USER ALL=(ALL) NOPASSWD: /usr/bin/tail -n 80 /var/log/letsencrypt/letsencrypt.log
+$PROVISION_USER ALL=(ALL) NOPASSWD: /usr/bin/certbot *
 $PROVISION_USER ALL=(ALL) NOPASSWD: /usr/bin/systemctl reload apache2
 $PROVISION_USER ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart apache2
 $PROVISION_USER ALL=(ALL) NOPASSWD: /usr/bin/tee /etc/apache2/sites-available/*.conf
+$PROVISION_USER ALL=(ALL) NOPASSWD: /usr/bin/a2ensite *
+$PROVISION_USER ALL=(ALL) NOPASSWD: /usr/bin/a2dissite 000-default
 $PROVISION_USER ALL=(ALL) NOPASSWD: /usr/sbin/a2ensite *
 $PROVISION_USER ALL=(ALL) NOPASSWD: /usr/sbin/a2dissite 000-default
 SUDOEOF

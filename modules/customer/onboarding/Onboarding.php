@@ -8,13 +8,12 @@ class Onboarding extends Trongate
   // ── Router ──────────────────────────────────────────────────────
   //  Step 1 → ssh_key
   //  Step 2 → environment
-  //  Step 4 → choose_provider      (Manual | Hetzner)
-  //  Step 5 → server_manual        (IP + name)
-  //         → server_hetzner       (API token + guidance)
-  //  Step 6 → register_deployment  (both paths: confirm server + create deployment)
-  //  Step 7 → provision_server
-  //  Step 8 → dns_ssl
-  //  Step 9 → deploy_app
+  //  Step 3 → choose_provider     (Manual | Hetzner)
+  //  Step 4 → configure provider  (server_manual | server_hetzner)
+  //  Step 5 → provision_server
+  //  Step 6 → dns_ssl
+  //  Step 7 → register_deployment
+  //  Step 8 → deploy_app          (mark onboarded after successful deploy)
 
   function index(): void
   {
@@ -28,30 +27,41 @@ class Onboarding extends Trongate
       redirect('customer-onboarding/environment');
     }
 
-    $choice = $_SESSION['onboarding_provider'] ?? null;
+    $choice = $this->_onboarding_provider($customer);
 
     if ($choice === null) {
       redirect('customer-onboarding/choose_provider');
     }
 
-    if ($choice === 'manual') {
-      if ($this->model->first_server((int) $customer->id) === false) {
+    $server = $this->model->first_server((int) $customer->id);
+    if ($server === false) {
+      if ($choice === 'manual') {
         redirect('customer-onboarding/server_manual');
       }
-    } elseif ($choice === 'hetzner') {
+
       $this->module('provider');
       if (!$this->provider->model->has_hetzner((int) $customer->id)) {
         redirect('customer-onboarding/server_hetzner');
       }
+      redirect('customer-onboarding/configure_hetzner_server');
     }
 
-    if ($this->model->first_deployment((int) $customer->id) === false) {
+    $_SESSION['onboarding_server_id'] = (int) $server->id;
+    if ($server->status !== 'active') {
+      redirect('customer-onboarding/provision_server');
+    }
+
+    if (empty($_SESSION['onboarding_dns_ssl_seen'])) {
+      redirect('customer-onboarding/dns_ssl');
+    }
+
+    $deployment = $this->model->first_deployment((int) $customer->id);
+    if ($deployment === false) {
       redirect('customer-onboarding/register_deployment');
     }
 
-    $this->model->mark_onboarded((int) $customer->id);
-    unset($_SESSION['onboarding_provider']);
-    redirect('customer');
+    $_SESSION['onboarding_deployment_id'] = (int) $deployment->id;
+    redirect('customer-onboarding/deploy_app');
   }
 
   // ── Step 1: SSH Key ─────────────────────────────────────────────
@@ -173,7 +183,7 @@ class Onboarding extends Trongate
 
   function submit_choose_provider(): void
   {
-    $this->_require_not_onboarded();
+    $customer = $this->_require_not_onboarded();
 
     $choice = post('provider', true);
     if (!in_array($choice, ['manual', 'hetzner'], true)) {
@@ -187,6 +197,7 @@ class Onboarding extends Trongate
       return;
     }
 
+    $this->model->save_onboarding_provider((int) $customer->id, $choice);
     $_SESSION['onboarding_provider'] = $choice;
 
     redirect(
@@ -202,7 +213,7 @@ class Onboarding extends Trongate
   {
     $customer = $this->_require_not_onboarded();
 
-    if (($_SESSION['onboarding_provider'] ?? null) !== 'manual') {
+    if ($this->_onboarding_provider($customer) !== 'manual') {
       redirect('customer-onboarding/choose_provider');
     }
 
@@ -233,7 +244,7 @@ class Onboarding extends Trongate
       return;
     }
 
-    $this->model->create_server([
+    $server_id = (int) $this->model->create_server([
       'environment_id' => (int) $env->id,
       'customer_id'    => (int) $customer->id,
       'name'           => post('name', true),
@@ -245,69 +256,44 @@ class Onboarding extends Trongate
     ]);
 
     $this->model->backfill_service_hosts((int) $env->id, post('ip_address', true));
+    $_SESSION['onboarding_server_id'] = $server_id;
 
-    redirect('customer-onboarding/register_deployment');
+    redirect('customer-onboarding/provision_server');
   }
 
-  // ── Step 6: Create deployment (both paths) ─────────────────────
+  // ── Step 7: Create deployment ──────────────────────────────────
 
   function register_deployment(): void
   {
     $customer = $this->_require_not_onboarded();
-    $choice   = $_SESSION['onboarding_provider'] ?? null;
-
     $env = $this->model->first_environment((int) $customer->id);
     if ($env === false) {
       redirect('customer-onboarding/environment');
     }
 
-    if ($choice === 'manual') {
-      $server = $this->model->first_server((int) $customer->id);
-      if ($server === false) {
-        redirect('customer-onboarding/server_manual');
-      }
-
-      $this->view('register_deployment', [
-        'provider' => 'manual',
-        'env'      => $env,
-        'server'   => $server,
-      ]);
-    } elseif ($choice === 'hetzner') {
-      $this->module('provider');
-      if (!$this->provider->model->has_hetzner((int) $customer->id)) {
-        redirect('customer-onboarding/server_hetzner');
-      }
-
-      try {
-        $h            = $this->_hetzner_client((int) $customer->id);
-        $regions      = $h->list_regions();
-        $server_types = $h->list_server_types();
-        $all_servers  = $h->list_servers();
-        $this->module('server');
-        $tracked    = $this->server->model->tracked_hetzner_ids((int) $customer->id);
-        $importable = array_values(array_filter($all_servers, fn($s) => !in_array($s['id'], $tracked)));
-      } catch (Throwable $e) {
-        $_SESSION['flash_error'] = 'Could not load Hetzner data: ' . $e->getMessage();
-        redirect('customer-onboarding/server_hetzner');
-      }
-
-      $this->view('register_deployment', [
-        'provider'     => 'hetzner',
-        'env'          => $env,
-        'regions'      => $regions,
-        'server_types' => $server_types,
-        'importable'   => $importable,
-      ]);
-    } else {
+    $server = $this->model->first_server((int) $customer->id);
+    if ($server === false) {
       redirect('customer-onboarding/choose_provider');
     }
+    if ($server->status !== 'active') {
+      $_SESSION['onboarding_server_id'] = (int) $server->id;
+      redirect('customer-onboarding/provision_server');
+    }
+    if (empty($_SESSION['onboarding_dns_ssl_seen'])) {
+      $_SESSION['onboarding_server_id'] = (int) $server->id;
+      redirect('customer-onboarding/dns_ssl');
+    }
+
+    $this->view('register_deployment', [
+      'provider' => $server->provider ?? 'manual',
+      'env'      => $env,
+      'server'   => $server,
+    ]);
   }
 
   function submit_register_deployment(): void
   {
     $customer = $this->_require_not_onboarded();
-    $choice   = $_SESSION['onboarding_provider'] ?? null;
-
     $env = $this->model->first_environment((int) $customer->id);
     if ($env === false) {
       redirect('customer-onboarding/environment');
@@ -320,6 +306,11 @@ class Onboarding extends Trongate
       $this->validation->set_rules('branch',   'branch',   'required|max_length[100]');
     }
 
+    if ($this->validation->run() !== true) {
+      $this->register_deployment();
+      return;
+    }
+
     $zip_path = null;
     if ($source_type === 'zip') {
       $zip_path = $this->_store_zip();
@@ -330,26 +321,23 @@ class Onboarding extends Trongate
       }
     }
 
-    if ($choice === 'manual') {
-      $server = $this->model->first_server((int) $customer->id);
-      if ($server === false) {
-        redirect('customer-onboarding/server_manual');
-      }
-      $server_id = (int) $server->id;
-    } elseif ($choice === 'hetzner') {
-      $server_id = match (post('provider', true)) {
-        'hetzner'        => $this->_try_hetzner_new($customer, $env),
-        'hetzner_import' => $this->_try_hetzner_import($customer, $env),
-        default          => null,
-      };
-      if ($server_id === null) {
-        $this->register_deployment();
-        return;
-      }
-    } else {
+    $server = $this->model->first_server((int) $customer->id);
+    if ($server === false) {
       redirect('customer-onboarding/choose_provider');
       return;
     }
+    if ($server->status !== 'active') {
+      $_SESSION['onboarding_server_id'] = (int) $server->id;
+      redirect('customer-onboarding/provision_server');
+      return;
+    }
+    if (empty($_SESSION['onboarding_dns_ssl_seen'])) {
+      $_SESSION['onboarding_server_id'] = (int) $server->id;
+      redirect('customer-onboarding/dns_ssl');
+      return;
+    }
+
+    $server_id = (int) $server->id;
 
     $id = $this->model->create_deployment([
       'server_id'      => $server_id,
@@ -364,12 +352,9 @@ class Onboarding extends Trongate
       'status'         => 'script_ready',
     ]);
 
-    $this->model->mark_onboarded((int) $customer->id);
     $_SESSION['onboarding_server_id']     = $server_id;
     $_SESSION['onboarding_deployment_id'] = (int) $id;
-    unset($_SESSION['onboarding_dns_ssl_seen']);
-    unset($_SESSION['onboarding_provider']);
-    redirect('customer-onboarding/provision_server');
+    redirect('customer-onboarding/deploy_app');
   }
 
   // ── Step 5b: Hetzner ────────────────────────────────────────────
@@ -378,7 +363,7 @@ class Onboarding extends Trongate
   {
     $customer = $this->_require_not_onboarded();
 
-    if (($_SESSION['onboarding_provider'] ?? null) !== 'hetzner') {
+    if ($this->_onboarding_provider($customer) !== 'hetzner') {
       redirect('customer-onboarding/choose_provider');
     }
 
@@ -438,7 +423,74 @@ class Onboarding extends Trongate
     $this->module('provider');
     $this->provider->model->save_hetzner((int) $customer->id, $token, $key_id, $label, $ssh_key_ids);
 
-    redirect('customer-onboarding/register_deployment');
+    redirect('customer-onboarding/configure_hetzner_server');
+  }
+
+  function configure_hetzner_server(): void
+  {
+    $customer = $this->_require_not_onboarded();
+
+    if ($this->_onboarding_provider($customer) !== 'hetzner') {
+      redirect('customer-onboarding/choose_provider');
+    }
+
+    $env = $this->model->first_environment((int) $customer->id);
+    if ($env === false) {
+      redirect('customer-onboarding/environment');
+    }
+
+    $this->module('provider');
+    if (!$this->provider->model->has_hetzner((int) $customer->id)) {
+      redirect('customer-onboarding/server_hetzner');
+    }
+
+    try {
+      $h            = $this->_hetzner_client((int) $customer->id);
+      $regions      = $h->list_regions();
+      $server_types = $h->list_server_types();
+      $all_servers  = $h->list_servers();
+      $this->module('server');
+      $tracked    = $this->server->model->tracked_hetzner_ids((int) $customer->id);
+      $importable = array_values(array_filter($all_servers, fn($s) => !in_array($s['id'], $tracked)));
+    } catch (Throwable $e) {
+      $_SESSION['flash_error'] = 'Could not load Hetzner data: ' . $e->getMessage();
+      redirect('customer-onboarding/server_hetzner');
+    }
+
+    $this->view('configure_hetzner_server', [
+      'env'          => $env,
+      'regions'      => $regions,
+      'server_types' => $server_types,
+      'importable'   => $importable,
+    ]);
+  }
+
+  function submit_configure_hetzner_server(): void
+  {
+    $customer = $this->_require_not_onboarded();
+
+    if ($this->_onboarding_provider($customer) !== 'hetzner') {
+      redirect('customer-onboarding/choose_provider');
+    }
+
+    $env = $this->model->first_environment((int) $customer->id);
+    if ($env === false) {
+      redirect('customer-onboarding/environment');
+    }
+
+    $server_id = match (post('provider', true)) {
+      'hetzner'        => $this->_try_hetzner_new($customer, $env),
+      'hetzner_import' => $this->_try_hetzner_import($customer, $env),
+      default          => null,
+    };
+
+    if ($server_id === null) {
+      $this->configure_hetzner_server();
+      return;
+    }
+
+    $_SESSION['onboarding_server_id'] = (int) $server_id;
+    redirect('customer-onboarding/provision_server');
   }
 
   private function _try_hetzner_new(object $customer, object $env): ?int
@@ -473,6 +525,7 @@ class Onboarding extends Trongate
       'customer_id'    => (int) $customer->id,
       'name'           => $name,
       'ip_address'     => $result['ipv4'],
+      'ipv6_address'   => $result['ipv6'] ?? null,
       'ssh_user'       => 'root',
       'ssh_port'       => 22,
       'provider'       => 'hetzner',
@@ -508,6 +561,7 @@ class Onboarding extends Trongate
       'customer_id'    => (int) $customer->id,
       'name'           => post('name', true),
       'ip_address'     => $remote['ip'],
+      'ipv6_address'   => $remote['ipv6'] ?? null,
       'ssh_user'       => 'root',
       'ssh_port'       => 22,
       'provider'       => 'hetzner',
@@ -566,7 +620,7 @@ class Onboarding extends Trongate
     return $code === 0 ? trim(implode("\n", $out)) : '';
   }
 
-  // ── Step 7: Provision server ────────────────────────────────────
+  // ── Step 5: Provision server ────────────────────────────────────
 
   function provision_server(): void
   {
@@ -589,7 +643,7 @@ class Onboarding extends Trongate
     ]);
   }
 
-  // ── Step 8: DNS & SSL ───────────────────────────────────────────
+  // ── Step 6: DNS & SSL ───────────────────────────────────────────
 
   function dns_ssl(): void
   {
@@ -610,6 +664,7 @@ class Onboarding extends Trongate
       'domain' => trim((string) ($server->domain ?? '')),
       'can_enable_ssl' => $this->_can_enable_ssl($server),
       'ssl_error' => $this->_ssl_preflight_error($server),
+      'ssl_retryable_failure' => !empty($_SESSION['onboarding_ssl_retryable_failure']),
     ]);
   }
 
@@ -636,7 +691,8 @@ class Onboarding extends Trongate
 
     if ($action === 'skip') {
       $_SESSION['onboarding_dns_ssl_seen'] = 1;
-      redirect('customer-onboarding/deploy_app');
+      unset($_SESSION['onboarding_ssl_retryable_failure']);
+      redirect('customer-onboarding/register_deployment');
       return;
     }
 
@@ -659,19 +715,21 @@ class Onboarding extends Trongate
     }
 
     if ($exit_code !== 0) {
+      $_SESSION['onboarding_ssl_retryable_failure'] = 1;
       $_SESSION['form_submission_errors'][] = [
-        'SSL setup failed: ' . substr(trim($log) ?: 'certbot failed.', 0, 500),
+        $this->_ssl_failure_message($log, $exit_code),
       ];
       $this->dns_ssl();
       return;
     }
 
     $_SESSION['onboarding_dns_ssl_seen'] = 1;
+    unset($_SESSION['onboarding_ssl_retryable_failure']);
     $_SESSION['flash_success'] = 'SSL enabled for ' . trim((string) $server->domain) . '.';
-    redirect('customer-onboarding/deploy_app');
+    redirect('customer-onboarding/register_deployment');
   }
 
-  // ── Step 9: Deploy app ──────────────────────────────────────────
+  // ── Step 8: Deploy app ──────────────────────────────────────────
 
   function deploy_app(): void
   {
@@ -683,8 +741,13 @@ class Onboarding extends Trongate
 
     $deployment_id = (int) ($_SESSION['onboarding_deployment_id'] ?? 0);
     if ($deployment_id === 0) {
-      redirect('customer');
-      return;
+      $deployment = $this->model->first_deployment((int) $customer->id);
+      if ($deployment === false) {
+        redirect('customer-onboarding/register_deployment');
+        return;
+      }
+      $deployment_id = (int) $deployment->id;
+      $_SESSION['onboarding_deployment_id'] = $deployment_id;
     }
     $this->module('deployment');
     $deployment = $this->deployment->model->get($deployment_id, (int) $customer->id);
@@ -696,6 +759,33 @@ class Onboarding extends Trongate
       'deployment' => $deployment,
       'stream_url' => BASE_URL . 'deployment/stream/' . (int) $deployment->id,
     ]);
+  }
+
+  function complete(): void
+  {
+    $customer = $this->_require_logged_in();
+    $deployment_id = (int) ($_SESSION['onboarding_deployment_id'] ?? 0);
+    if ($deployment_id === 0) {
+      http_response_code(400);
+      return;
+    }
+
+    $this->module('deployment');
+    $deployment = $this->deployment->model->get($deployment_id, (int) $customer->id);
+    if ($deployment === false || $deployment->status !== 'success') {
+      http_response_code(409);
+      return;
+    }
+
+    $this->model->mark_onboarded((int) $customer->id);
+    unset($_SESSION['onboarding_provider']);
+    unset($_SESSION['onboarding_server_id']);
+    unset($_SESSION['onboarding_deployment_id']);
+    unset($_SESSION['onboarding_dns_ssl_seen']);
+    unset($_SESSION['onboarding_ssl_retryable_failure']);
+
+    header('Content-Type: application/json');
+    echo json_encode(['ok' => true]);
   }
 
   // ── Validation callbacks ────────────────────────────────────────
@@ -784,7 +874,12 @@ class Onboarding extends Trongate
   {
     $server_id = (int) ($_SESSION['onboarding_server_id'] ?? 0);
     if ($server_id === 0) {
-      return false;
+      $server = $this->model->first_server((int) $customer->id);
+      if ($server === false) {
+        return false;
+      }
+      $server_id = (int) $server->id;
+      $_SESSION['onboarding_server_id'] = $server_id;
     }
     $this->module('server');
     return $this->server->model->get($server_id, (int) $customer->id);
@@ -871,6 +966,48 @@ class Onboarding extends Trongate
     return [proc_close($proc), trim($output)];
   }
 
+  private function _ssl_failure_message(string $log, int $exit_code): string
+  {
+    $message = trim($log);
+
+    if ($exit_code === 124) {
+      return 'SSL setup failed: the remote setup timed out before finishing. Check whether apt, Apache, or certbot is still running on the server, then try again.';
+    }
+
+    if (preg_match('/SUDO_DENIED_COMMAND=([^\r\n]+)/', $message, $matches)) {
+      return 'SSL setup failed: passwordless sudo is missing for `' . trim($matches[1]) . '`. Add that command to /etc/sudoers.d/provision, then try again.';
+    }
+
+    if (stripos($message, 'requires root privileges') !== false ||
+      (stripos($message, 'permission denied') !== false && stripos($message, 'apt') !== false)
+    ) {
+      return 'SSL setup failed: the SSH user needs root privileges to install certbot. Connect as root or configure passwordless sudo, then try again.';
+    }
+
+    if ($exit_code === 13) {
+      return 'SSL setup failed: sudo rejected one of the required commands. Details: ' . $this->_tail_text($message ?: 'No remote sudo output was captured.', 800);
+    }
+
+    if (stripos($message, 'Timed out waiting for apt/dpkg locks') !== false ||
+      $exit_code === 75 ||
+      stripos($message, 'Could not get lock') !== false ||
+      stripos($message, 'Unable to lock directory') !== false
+    ) {
+      return 'SSL setup failed: another apt/dpkg process is still running on the server. Wait a few minutes, then try again.';
+    }
+
+    if ($message === '') {
+      return 'SSL setup failed with exit code ' . $exit_code . ' before producing output. Retry once; if it repeats, run certbot manually on the server to see the underlying error.';
+    }
+
+    return 'SSL setup failed: ' . substr($message ?: 'certbot failed.', 0, 500);
+  }
+
+  private function _tail_text(string $message, int $length): string
+  {
+    return strlen($message) > $length ? '...' . substr($message, -$length) : $message;
+  }
+
   private function _valid_domain(string $domain): bool
   {
     if ($domain === '' || strlen($domain) > 253) {
@@ -893,6 +1030,24 @@ class Onboarding extends Trongate
     if (!empty($customer->onboarded_at)) redirect('customer');
 
     return $customer;
+  }
+
+  private function _onboarding_provider(object $customer): ?string
+  {
+    $choice = $customer->onboarding_provider ?? null;
+
+    if (in_array($choice, ['manual', 'hetzner'], true)) {
+      $_SESSION['onboarding_provider'] = $choice;
+      return $choice;
+    }
+
+    $choice = $_SESSION['onboarding_provider'] ?? null;
+    if (in_array($choice, ['manual', 'hetzner'], true)) {
+      $this->model->save_onboarding_provider((int) $customer->id, $choice);
+      return $choice;
+    }
+
+    return null;
   }
 
   private function _require_logged_in(): object

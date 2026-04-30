@@ -55,7 +55,7 @@
     <?= form_close() ?>
 
     <p class="onboarding-footer-note">
-        Step 1 of 9 &mdash; <a href="customer/logout">Sign out</a>
+        Step 1 of 8 &mdash; <a href="customer/logout">Sign out</a>
     </p>
 </div>
 

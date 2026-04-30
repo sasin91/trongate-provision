@@ -333,6 +333,34 @@ body {
     word-break: break-all;
 }
 
+.copy-value {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    max-width: 100%;
+    cursor: pointer;
+}
+
+.copy-btn {
+    border: 1px solid #c7d2fe;
+    background: #ffffff;
+    color: #4338ca;
+    border-radius: 6px;
+    padding: 0.2rem 0.45rem;
+    font-family: inherit;
+    font-size: 0.7rem;
+    font-weight: 700;
+    line-height: 1.2;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.copy-btn:hover {
+    border-color: #818cf8;
+    background: #f8fafc;
+}
+
 .secondary-action-form {
     margin-top: 0.75rem;
 }
