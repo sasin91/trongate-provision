@@ -15,9 +15,9 @@ $webroot = trim((string) ($server->web_root ?: "/var/www/html"));
 #!/bin/bash
 set -Eeuo pipefail
 
-DOMAIN=<?= $sq($domain) ?>
-CERTBOT_EMAIL=<?= $sq($email) ?>
-LIVE_LINK=<?= $sq($webroot) ?>
+DOMAIN=<?= $sq($domain) ?>;
+CERTBOT_EMAIL=<?= $sq($email) ?>;
+LIVE_LINK=<?= $sq($webroot) ?>;
 
 trap 'status=$?; echo "SSL setup failed at script line ${LINENO} with exit code ${status}."; exit $status' ERR
 

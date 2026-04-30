@@ -144,7 +144,12 @@ class Customer extends Trongate {
                 }
                 break;
             case 'server':
-                if (in_array($method, ['server_types_options'], true)) {
+                if (in_array($method, ['stream','server_types_options'], true)) {
+                    return;
+                }
+                break;
+            case 'deployment':
+                if ($method === 'stream') {
                     return;
                 }
                 break;

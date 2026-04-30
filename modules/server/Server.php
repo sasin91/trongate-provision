@@ -464,50 +464,7 @@ class Server extends Trongate
   function stream(): void
   {
     $id = (int) segment(3);
-
-    $this->module("trongate_tokens");
-    $token = $this->trongate_tokens->attempt_get_valid_token(
-      Customer::CUSTOMER_LEVEL,
-    );
-    if ($token === false) {
-      http_response_code(401);
-      exit();
-    }
-    $this->module("customer");
-    $customer = $this->customer->model->_get_current_customer();
-    $is_onboarding_server = (int) ($_SESSION["onboarding_server_id"] ?? 0) === $id;
-    if ($customer === false || (empty($customer->onboarded_at) && !$is_onboarding_server)) {
-      http_response_code(401);
-      exit();
-    }
-
-    $s = $this->model->get($id, (int) $customer->id);
-    if ($s === false) {
-      http_response_code(404);
-      exit();
-    }
-
-    if (!defined("RUNNER_SSH_KEY") || !RUNNER_SSH_KEY) {
-      http_response_code(503);
-      echo "RUNNER_SSH_KEY is not configured.";
-      exit();
-    }
-
-    if (session_status() === PHP_SESSION_ACTIVE) {
-      session_write_close();
-    }
-
-    header("Content-Type: text/event-stream");
-    header("Cache-Control: no-cache");
-    header("X-Accel-Buffering: no");
-    header("Connection: keep-alive");
-    ini_set("output_buffering", "Off");
-    ini_set("zlib.output_compression", "Off");
-    set_time_limit(0);
-    while (ob_get_level() > 0) {
-      ob_end_clean();
-    }
-
+    $this->_start_event_stream();
     $emit = static function (string $line, string $event = ""): void {
       if ($event !== "") {
         echo "event: {$event}\n";
@@ -515,6 +472,60 @@ class Server extends Trongate
       echo "data: " . $line . "\n\n";
       flush();
     };
+
+    $this->module("trongate_tokens");
+    $token = $this->trongate_tokens->attempt_get_valid_token(
+      Customer::CUSTOMER_LEVEL,
+    );
+    if ($token === false) {
+      http_response_code(401);
+      $emit("Unauthorized.");
+      $emit(json_encode(["status" => "failed"]), "done");
+      exit();
+    }
+    $this->module("customer");
+    $customer = $this->customer->model->_get_current_customer();
+    if ($customer === false) {
+      http_response_code(401);
+      $emit("Unauthorized.");
+      $emit(json_encode(["status" => "failed"]), "done");
+      exit();
+    }
+
+    $is_onboarding_server = (int) ($customer->onboarding_server_id ?? 0) === $id;
+    if (empty($customer->onboarded_at) && !$is_onboarding_server) {
+      http_response_code(401);
+      $emit("Unauthorized for this onboarding server.");
+      $emit(json_encode(["status" => "failed"]), "done");
+      exit();
+    }
+
+    $s = $this->model->get($id, (int) $customer->id);
+    if ($s === false) {
+      http_response_code(404);
+      $emit("Server not found.");
+      $emit(json_encode(["status" => "failed"]), "done");
+      exit();
+    }
+
+    if (!defined("RUNNER_SSH_KEY") || !RUNNER_SSH_KEY) {
+      http_response_code(503);
+      $emit("RUNNER_SSH_KEY is not configured.");
+      $emit(json_encode(["status" => "failed"]), "done");
+      exit();
+    }
+
+    if (session_status() === PHP_SESSION_ACTIVE) {
+      session_write_close();
+    }
+
+    ignore_user_abort(true);
+    ini_set("output_buffering", "Off");
+    ini_set("zlib.output_compression", "Off");
+    set_time_limit(0);
+    while (ob_get_level() > 0) {
+      ob_end_clean();
+    }
 
     $user = $s->ssh_user ?: "root";
     $port = (int) ($s->ssh_port ?: 22);
@@ -530,8 +541,19 @@ class Server extends Trongate
       return;
     }
     if (!$this->model->mark_provisioning($id)) {
-      $emit("Server is already being provisioned.");
-      $emit(json_encode(["status" => "provisioning"]), "done");
+      if (($s->status ?? "") === "active") {
+        $emit("Server is already provisioned and active.");
+        $emit(json_encode(["status" => "active"]), "done");
+        return;
+      }
+
+      if (($s->status ?? "") === "failed") {
+        $emit("Previous provisioning attempt failed.");
+        $emit(json_encode(["status" => "failed"]), "done");
+        return;
+      }
+
+      $this->_wait_for_existing_provisioning($id, (int) $customer->id, $emit);
       return;
     }
 
@@ -714,6 +736,45 @@ class Server extends Trongate
       ]);
       $emit(json_encode(["status" => "failed"]), "done");
     }
+  }
+
+  function _start_event_stream(): void
+  {
+    header("Content-Type: text/event-stream");
+    header("Cache-Control: no-cache");
+    header("X-Accel-Buffering: no");
+    header("Connection: keep-alive");
+  }
+
+  function _wait_for_existing_provisioning(int $id, int $customer_id, callable $emit): void
+  {
+    $emit("Server is already being provisioned; waiting for the running job to finish.");
+
+    $timeout = 90;
+    $started = time();
+
+    while ((time() - $started) < $timeout) {
+      sleep(5);
+
+      $server = $this->model->get($id, $customer_id);
+      if ($server === false) {
+        $emit("Server not found.");
+        $emit(json_encode(["status" => "failed"]), "done");
+        return;
+      }
+
+      if ($server->status === "active" || $server->status === "failed") {
+        $emit(json_encode(["status" => $server->status]), "done");
+        return;
+      }
+
+      echo ": waiting-for-existing-provision\n\n";
+      flush();
+    }
+
+    $this->model->mark_result($id, "failed");
+    $emit("Provisioning did not finish after the browser reconnected. Restarting provisioning.");
+    $emit(json_encode(["status" => "retry"]), "done");
   }
 
   function mark_active(): void

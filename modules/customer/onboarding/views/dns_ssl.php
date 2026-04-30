@@ -57,6 +57,32 @@ $copyable_value = static function (string $value): void {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DNS &amp; SSL — Provision Setup</title>
     <link rel="stylesheet" href="customer-onboarding_module/css/onboarding.css">
+    <style>
+        #ssl-log-panel {
+            display: none;
+            margin: 1rem 0;
+        }
+        #ssl-log {
+            background: #0f172a;
+            color: #e2e8f0;
+            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+            font-size: .775rem;
+            line-height: 1.6;
+            padding: 1rem 1.125rem;
+            border-radius: 8px;
+            max-height: 260px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+            margin: 0 0 .75rem;
+        }
+        #ssl-status-msg {
+            font-size: .825rem;
+            text-align: center;
+            color: var(--text-muted);
+            min-height: 1.25rem;
+        }
+    </style>
 </head>
 <body>
 
@@ -166,13 +192,14 @@ $copyable_value = static function (string $value): void {
     </div>
 
     <?php if ($domain !== ''): ?>
-        <?= form_open('customer-onboarding/dns_ssl') ?>
-        <input type="hidden" name="action" value="enable_ssl">
-        <button type="submit" class="btn-primary" <?= $can_enable_ssl ? '' : 'disabled' ?>>
+        <button type="button" id="enable-ssl-btn" class="btn-primary" data-stream-url="<?= htmlspecialchars($ssl_stream_url) ?>" <?= $can_enable_ssl ? '' : 'disabled' ?>>
             <div class="spinner"></div>
             Enable SSL &amp; Continue
         </button>
-        <?= form_close() ?>
+        <div id="ssl-log-panel">
+            <pre id="ssl-log">Connecting...</pre>
+            <div id="ssl-status-msg"></div>
+        </div>
     <?php endif; ?>
 
     <?= form_open('customer-onboarding/dns_ssl', ['class' => 'secondary-action-form']) ?>
@@ -233,6 +260,82 @@ $copyable_value = static function (string $value): void {
             });
         });
     });
+
+    var enableSslButton = document.getElementById('enable-ssl-btn');
+    var skipForm = document.querySelector('.secondary-action-form');
+    var sslPanel = document.getElementById('ssl-log-panel');
+    var sslLog = document.getElementById('ssl-log');
+    var sslStatus = document.getElementById('ssl-status-msg');
+
+    function appendSslLog(line) {
+        if (!sslLog) return;
+        sslLog.textContent += line + '\n';
+        sslLog.scrollTop = sslLog.scrollHeight;
+    }
+
+    function startSslStream() {
+        if (!enableSslButton || typeof EventSource === 'undefined') return;
+
+        enableSslButton.disabled = true;
+        enableSslButton.classList.add('btn-loading');
+        if (skipForm) {
+            skipForm.style.display = 'none';
+        }
+        if (sslPanel) {
+            sslPanel.style.display = 'block';
+        }
+        if (sslLog) {
+            sslLog.textContent = 'Connecting...\n';
+        }
+        if (sslStatus) {
+            sslStatus.textContent = '';
+        }
+
+        var stream = new EventSource(enableSslButton.dataset.streamUrl);
+
+        stream.onmessage = function (event) {
+            appendSslLog(event.data);
+        };
+
+        stream.addEventListener('done', function (event) {
+            stream.close();
+            var result = JSON.parse(event.data);
+            if (result.status === 'success') {
+                if (sslStatus) {
+                    sslStatus.textContent = 'SSL enabled. Continuing...';
+                }
+                window.location.href = 'customer-onboarding/register_deployment';
+                return;
+            }
+
+            enableSslButton.disabled = false;
+            enableSslButton.classList.remove('btn-loading');
+            if (skipForm) {
+                skipForm.style.display = '';
+            }
+            if (sslStatus) {
+                sslStatus.textContent = 'SSL setup failed. You can retry or skip SSL for now.';
+            }
+        });
+
+        stream.onerror = function () {
+            if (stream.readyState === EventSource.CLOSED) return;
+            stream.close();
+            appendSslLog('[Connection closed]');
+            enableSslButton.disabled = false;
+            enableSslButton.classList.remove('btn-loading');
+            if (skipForm) {
+                skipForm.style.display = '';
+            }
+            if (sslStatus) {
+                sslStatus.textContent = 'Connection lost. You can retry or skip SSL for now.';
+            }
+        };
+    }
+
+    if (enableSslButton) {
+        enableSslButton.addEventListener('click', startSslStream);
+    }
 })();
 </script>
 </body>

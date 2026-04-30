@@ -46,12 +46,12 @@ class Onboarding extends Trongate
       redirect('customer-onboarding/configure_hetzner_server');
     }
 
-    $_SESSION['onboarding_server_id'] = (int) $server->id;
+    $this->_remember_onboarding_server($customer, (int) $server->id);
     if ($server->status !== 'active') {
       redirect('customer-onboarding/provision_server');
     }
 
-    if (empty($_SESSION['onboarding_dns_ssl_seen'])) {
+    if (empty($customer->onboarding_dns_ssl_seen)) {
       redirect('customer-onboarding/dns_ssl');
     }
 
@@ -60,7 +60,6 @@ class Onboarding extends Trongate
       redirect('customer-onboarding/register_deployment');
     }
 
-    $_SESSION['onboarding_deployment_id'] = (int) $deployment->id;
     redirect('customer-onboarding/deploy_app');
   }
 
@@ -193,7 +192,6 @@ class Onboarding extends Trongate
     }
 
     $this->model->save_onboarding_provider((int) $customer->id, $choice);
-    $_SESSION['onboarding_provider'] = $choice;
 
     redirect(
       $choice === 'hetzner'
@@ -240,7 +238,7 @@ class Onboarding extends Trongate
       ]);
 
       $this->model->backfill_service_hosts((int) $env->id, post('ip_address', true));
-      $_SESSION['onboarding_server_id'] = $server_id;
+      $this->_remember_onboarding_server($customer, $server_id);
 
       redirect('customer-onboarding/provision_server');
       return;
@@ -290,19 +288,19 @@ class Onboarding extends Trongate
         return;
       }
       if ($server->status !== 'active') {
-        $_SESSION['onboarding_server_id'] = (int) $server->id;
+        $this->_remember_onboarding_server($customer, (int) $server->id);
         redirect('customer-onboarding/provision_server');
         return;
       }
-      if (empty($_SESSION['onboarding_dns_ssl_seen'])) {
-        $_SESSION['onboarding_server_id'] = (int) $server->id;
+      if (empty($customer->onboarding_dns_ssl_seen)) {
+        $this->_remember_onboarding_server($customer, (int) $server->id);
         redirect('customer-onboarding/dns_ssl');
         return;
       }
 
       $server_id = (int) $server->id;
 
-      $id = $this->model->create_deployment([
+      $this->model->create_deployment([
         'server_id'      => $server_id,
         'environment_id' => (int) $env->id,
         'customer_id'    => (int) $customer->id,
@@ -315,8 +313,6 @@ class Onboarding extends Trongate
         'status'         => 'script_ready',
       ]);
 
-      $_SESSION['onboarding_server_id']     = $server_id;
-      $_SESSION['onboarding_deployment_id'] = (int) $id;
       redirect('customer-onboarding/deploy_app');
       return;
     }
@@ -331,11 +327,11 @@ class Onboarding extends Trongate
       redirect('customer-onboarding/choose_provider');
     }
     if ($server->status !== 'active') {
-      $_SESSION['onboarding_server_id'] = (int) $server->id;
+      $this->_remember_onboarding_server($customer, (int) $server->id);
       redirect('customer-onboarding/provision_server');
     }
-    if (empty($_SESSION['onboarding_dns_ssl_seen'])) {
-      $_SESSION['onboarding_server_id'] = (int) $server->id;
+    if (empty($customer->onboarding_dns_ssl_seen)) {
+      $this->_remember_onboarding_server($customer, (int) $server->id);
       redirect('customer-onboarding/dns_ssl');
     }
 
@@ -448,7 +444,7 @@ class Onboarding extends Trongate
         return;
       }
 
-      $_SESSION['onboarding_server_id'] = (int) $server_id;
+      $this->_remember_onboarding_server($customer, (int) $server_id);
       redirect('customer-onboarding/provision_server');
       return;
     }
@@ -611,13 +607,7 @@ class Onboarding extends Trongate
   function provision_server(): void
   {
     $customer  = $this->_require_logged_in();
-    $server_id = (int) ($_SESSION['onboarding_server_id'] ?? 0);
-    if ($server_id === 0) {
-      redirect('customer');
-      return;
-    }
-    $this->module('server');
-    $server = $this->server->model->get($server_id, (int) $customer->id);
+    $server = $this->_onboarding_server($customer);
     if ($server === false) {
       redirect('customer');
       return;
@@ -654,7 +644,7 @@ class Onboarding extends Trongate
       }
 
       if ($action === 'skip') {
-        $_SESSION['onboarding_dns_ssl_seen'] = 1;
+        $this->_mark_dns_ssl_seen($customer);
         unset($_SESSION['onboarding_ssl_retryable_failure']);
         redirect('customer-onboarding/register_deployment');
         return;
@@ -687,7 +677,7 @@ class Onboarding extends Trongate
         return;
       }
 
-      $_SESSION['onboarding_dns_ssl_seen'] = 1;
+      $this->_mark_dns_ssl_seen($customer);
       unset($_SESSION['onboarding_ssl_retryable_failure']);
       $_SESSION['flash_success'] = 'SSL enabled for ' . trim((string) $server->domain) . '.';
       redirect('customer-onboarding/register_deployment');
@@ -705,7 +695,64 @@ class Onboarding extends Trongate
       'can_enable_ssl' => $this->_can_enable_ssl($server),
       'ssl_error' => $this->_ssl_preflight_error($server),
       'ssl_retryable_failure' => !empty($_SESSION['onboarding_ssl_retryable_failure']),
+      'ssl_stream_url' => BASE_URL . 'customer-onboarding/ssl_stream',
     ]);
+  }
+
+  function ssl_stream(): void
+  {
+    $this->_start_event_stream();
+    $emit = static function (string $line, string $event = ''): void {
+      if ($event !== '') {
+        echo "event: {$event}\n";
+      }
+      echo 'data: ' . $line . "\n\n";
+      flush();
+    };
+
+    $customer = $this->_require_logged_in();
+    $server = $this->_onboarding_server($customer);
+
+    if ($server === false) {
+      $emit('Server not found.');
+      $emit(json_encode(['status' => 'failed']), 'done');
+      return;
+    }
+
+    if ($server->status !== 'active') {
+      $emit('Provision the server before enabling SSL.');
+      $emit(json_encode(['status' => 'failed']), 'done');
+      return;
+    }
+
+    $error = $this->_ssl_preflight_error($server);
+    if ($error !== '') {
+      $emit($error);
+      $emit(json_encode(['status' => 'failed']), 'done');
+      return;
+    }
+
+    if (session_status() === PHP_SESSION_ACTIVE) {
+      session_write_close();
+    }
+    ignore_user_abort(true);
+
+    $emit('Starting SSL setup for ' . trim((string) $server->domain) . '...');
+    [$exit_code, $log] = $this->_run_remote_bash_stream(
+      $server,
+      $this->_render_certbot_script($server),
+      $emit,
+    );
+
+    if ($exit_code !== 0) {
+      $emit($this->_ssl_failure_message($log, $exit_code));
+      $emit(json_encode(['status' => 'failed']), 'done');
+      return;
+    }
+
+    $this->_mark_dns_ssl_seen($customer);
+    $emit('SSL setup complete.');
+    $emit(json_encode(['status' => 'success']), 'done');
   }
 
   // ── Step 8: Deploy app ──────────────────────────────────────────
@@ -713,23 +760,19 @@ class Onboarding extends Trongate
   function deploy_app(): void
   {
     $customer      = $this->_require_logged_in();
-    if (empty($_SESSION['onboarding_dns_ssl_seen'])) {
+    if (empty($customer->onboarding_dns_ssl_seen)) {
       redirect('customer-onboarding/dns_ssl');
       return;
     }
 
-    $deployment_id = (int) ($_SESSION['onboarding_deployment_id'] ?? 0);
-    if ($deployment_id === 0) {
-      $deployment = $this->model->first_deployment((int) $customer->id);
-      if ($deployment === false) {
-        redirect('customer-onboarding/register_deployment');
-        return;
-      }
-      $deployment_id = (int) $deployment->id;
-      $_SESSION['onboarding_deployment_id'] = $deployment_id;
+    $deployment = $this->model->first_deployment((int) $customer->id);
+    if ($deployment === false) {
+      redirect('customer-onboarding/register_deployment');
+      return;
     }
+
     $this->module('deployment');
-    $deployment = $this->deployment->model->get($deployment_id, (int) $customer->id);
+    $deployment = $this->deployment->model->get((int) $deployment->id, (int) $customer->id);
     if ($deployment === false) {
       redirect('customer');
       return;
@@ -743,24 +786,20 @@ class Onboarding extends Trongate
   function complete(): void
   {
     $customer = $this->_require_logged_in();
-    $deployment_id = (int) ($_SESSION['onboarding_deployment_id'] ?? 0);
-    if ($deployment_id === 0) {
+    $deployment = $this->model->first_deployment((int) $customer->id);
+    if ($deployment === false) {
       http_response_code(400);
       return;
     }
 
     $this->module('deployment');
-    $deployment = $this->deployment->model->get($deployment_id, (int) $customer->id);
+    $deployment = $this->deployment->model->get((int) $deployment->id, (int) $customer->id);
     if ($deployment === false || $deployment->status !== 'success') {
       http_response_code(409);
       return;
     }
 
     $this->model->mark_onboarded((int) $customer->id);
-    unset($_SESSION['onboarding_provider']);
-    unset($_SESSION['onboarding_server_id']);
-    unset($_SESSION['onboarding_deployment_id']);
-    unset($_SESSION['onboarding_dns_ssl_seen']);
     unset($_SESSION['onboarding_ssl_retryable_failure']);
 
     header('Content-Type: application/json');
@@ -856,17 +895,38 @@ class Onboarding extends Trongate
 
   function _onboarding_server(object $customer): object|false
   {
-    $server_id = (int) ($_SESSION['onboarding_server_id'] ?? 0);
+    $server_id = (int) ($customer->onboarding_server_id ?? 0);
     if ($server_id === 0) {
       $server = $this->model->first_server((int) $customer->id);
       if ($server === false) {
         return false;
       }
       $server_id = (int) $server->id;
-      $_SESSION['onboarding_server_id'] = $server_id;
+      $this->_remember_onboarding_server($customer, $server_id);
     }
     $this->module('server');
+
     return $this->server->model->get($server_id, (int) $customer->id);
+  }
+
+  function _remember_onboarding_server(object $customer, int $server_id): void
+  {
+    if ((int) ($customer->onboarding_server_id ?? 0) === $server_id) {
+      return;
+    }
+
+    $this->model->save_onboarding_server((int) $customer->id, $server_id);
+    $customer->onboarding_server_id = $server_id;
+  }
+
+  function _mark_dns_ssl_seen(object $customer): void
+  {
+    if (!empty($customer->onboarding_dns_ssl_seen)) {
+      return;
+    }
+
+    $this->model->mark_dns_ssl_seen((int) $customer->id);
+    $customer->onboarding_dns_ssl_seen = 1;
   }
 
   function _can_enable_ssl(object $server): bool
@@ -950,6 +1010,100 @@ class Onboarding extends Trongate
     return [proc_close($proc), trim($output)];
   }
 
+  function _run_remote_bash_stream(object $server, string $script, callable $emit): array
+  {
+    $user = $server->ssh_user ?: 'root';
+    $port = (int) ($server->ssh_port ?: 22);
+    $timeout = RUNNER_SCRIPT_TIMEOUT;
+    $cmd =
+      'ssh' .
+      ' -i ' .
+      escapeshellarg(RUNNER_SSH_KEY) .
+      ' -o StrictHostKeyChecking=no' .
+      ' -o UserKnownHostsFile=/dev/null' .
+      ' -o LogLevel=ERROR' .
+      ' -o BatchMode=yes' .
+      ' -o ConnectTimeout=15' .
+      ' -o ServerAliveInterval=30' .
+      ' -o ServerAliveCountMax=3' .
+      ' -p ' .
+      $port .
+      ' ' .
+      escapeshellarg("{$user}@{$server->ip_address}") .
+      " 'timeout {$timeout} bash -s'";
+
+    $proc = proc_open(
+      $cmd,
+      [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+      $pipes,
+    );
+    if (!is_resource($proc)) {
+      return [1, 'Failed to open SSH connection.'];
+    }
+
+    fwrite($pipes[0], $script);
+    fclose($pipes[0]);
+
+    stream_set_blocking($pipes[1], false);
+    stream_set_blocking($pipes[2], false);
+
+    $log = '';
+    $open = [1 => $pipes[1], 2 => $pipes[2]];
+    $buf = [1 => '', 2 => ''];
+
+    while (!empty($open)) {
+      $read = array_values($open);
+      $w = $e = null;
+      $n = stream_select($read, $w, $e, 15);
+      if ($n === false) {
+        break;
+      }
+      if ($n === 0) {
+        echo ": ssl-ping\n\n";
+        flush();
+        continue;
+      }
+
+      foreach ($read as $fh) {
+        $chunk = fread($fh, 4096);
+        if ($chunk !== false && $chunk !== '') {
+          $key = $fh === $pipes[1] ? 1 : 2;
+          $buf[$key] .= $chunk;
+          $log .= $chunk;
+          while (($nl = strpos($buf[$key], "\n")) !== false) {
+            $line = substr($buf[$key], 0, $nl);
+            $buf[$key] = substr($buf[$key], $nl + 1);
+            if ($line !== '') {
+              $emit(rtrim($line, "\r"));
+            }
+          }
+        }
+
+        if (feof($fh)) {
+          $key = $fh === $pipes[1] ? 1 : 2;
+          if ($buf[$key] !== '') {
+            $emit(rtrim($buf[$key], "\r\n"));
+            $buf[$key] = '';
+          }
+          $open = array_filter($open, static fn($pipe) => $pipe !== $fh);
+        }
+      }
+    }
+
+    fclose($pipes[1]);
+    fclose($pipes[2]);
+
+    return [proc_close($proc), trim($log)];
+  }
+
+  function _start_event_stream(): void
+  {
+    header('Content-Type: text/event-stream');
+    header('Cache-Control: no-cache');
+    header('X-Accel-Buffering: no');
+    header('Connection: keep-alive');
+  }
+
   function _ssl_failure_message(string $log, int $exit_code): string
   {
     $message = trim($log);
@@ -1021,13 +1175,6 @@ class Onboarding extends Trongate
     $choice = $customer->onboarding_provider ?? null;
 
     if (in_array($choice, ['manual', 'hetzner'], true)) {
-      $_SESSION['onboarding_provider'] = $choice;
-      return $choice;
-    }
-
-    $choice = $_SESSION['onboarding_provider'] ?? null;
-    if (in_array($choice, ['manual', 'hetzner'], true)) {
-      $this->model->save_onboarding_provider((int) $customer->id, $choice);
       return $choice;
     }
 

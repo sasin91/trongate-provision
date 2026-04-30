@@ -26,6 +26,14 @@ class Onboarding_model extends Model {
         $this->db->update($customer_id, ['onboarding_provider' => $provider], 'customer');
     }
 
+    function save_onboarding_server(int $customer_id, int $server_id): void {
+        $this->db->update($customer_id, ['onboarding_server_id' => $server_id], 'customer');
+    }
+
+    function mark_dns_ssl_seen(int $customer_id): void {
+        $this->db->update($customer_id, ['onboarding_dns_ssl_seen' => 1], 'customer');
+    }
+
     function has_ssh_key(int $customer_id): bool {
         $rows = $this->db->query_bind(
             "SELECT 1 FROM customer WHERE id = :id AND ssh_public_key IS NOT NULL AND ssh_public_key != '' LIMIT 1",
@@ -46,7 +54,12 @@ class Onboarding_model extends Model {
 
     function first_server(int $customer_id): object|false {
         $rows = $this->db->query_bind(
-            "SELECT * FROM server WHERE customer_id = :id ORDER BY id ASC LIMIT 1",
+            "SELECT s.*
+             FROM server s
+             JOIN customer c ON c.id = s.customer_id
+             WHERE s.customer_id = :id
+             ORDER BY CASE WHEN s.id = c.onboarding_server_id THEN 0 ELSE 1 END, s.id ASC
+             LIMIT 1",
             ['id' => $customer_id],
             'object'
         );

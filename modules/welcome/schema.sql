@@ -42,6 +42,8 @@ CREATE TABLE IF NOT EXISTS customer (
     active TINYINT(1) DEFAULT 1,
     onboarded_at DATETIME DEFAULT NULL,
     onboarding_provider VARCHAR(20) DEFAULT NULL,
+    onboarding_server_id INT UNSIGNED DEFAULT NULL,
+    onboarding_dns_ssl_seen TINYINT(1) DEFAULT 0,
     ssh_public_key TEXT DEFAULT NULL,
     failed_login_attempts INT DEFAULT 0,
     last_failed_attempt INT DEFAULT 0,
@@ -109,7 +111,7 @@ CREATE TABLE IF NOT EXISTS service (
     type ENUM('mysql','redis','postgresql','memcached','http','custom') DEFAULT 'mysql',
     host VARCHAR(255) DEFAULT NULL,
     port INT DEFAULT 3306,
-    status ENUM('pending','running','stopped','failed') DEFAULT 'pending',
+    status ENUM('pending','active','stopped','failed') DEFAULT 'pending',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 

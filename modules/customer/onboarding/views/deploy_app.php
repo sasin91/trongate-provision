@@ -77,7 +77,7 @@
     var msg    = document.getElementById('status-msg');
     var finish = document.getElementById('finish-panel');
 
-    var es = new EventSource('<?= BASE_URL ?>deployment/stream/<?= (int) $deployment->id ?>');
+    var es = new EventSource('<?= htmlspecialchars($stream_url) ?>');
 
     es.onmessage = function (e) {
         log.textContent += e.data + '\n';

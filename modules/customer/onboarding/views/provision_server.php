@@ -80,9 +80,26 @@
     function showNext(ok) {
         msg.textContent = ok
             ? '✓ Provisioning complete!'
-            : '✗ Provisioning failed — you can retry from the server page.';
-        if (!ok) nextBtn.textContent = 'Continue to DNS & SSL ↠';
+            : '✗ Provisioning failed — you can retry from here.';
+        if (!ok) {
+            nextBtn.href = 'customer-onboarding/provision_server';
+            nextBtn.textContent = 'Retry provisioning';
+        }
         next.style.display = '';
+    }
+
+    function showStillRunning() {
+        msg.textContent = 'Provisioning is still running — this page will check again shortly.';
+        window.setTimeout(function () {
+            window.location.reload();
+        }, 10000);
+    }
+
+    function retryProvisioning() {
+        msg.textContent = 'Restarting provisioning…';
+        window.setTimeout(function () {
+            window.location.reload();
+        }, 1000);
     }
 
     <?php if ($server->status === 'active'): ?>
@@ -99,6 +116,14 @@
     es.addEventListener('done', function (e) {
         es.close();
         var result = JSON.parse(e.data);
+        if (result.status === 'provisioning') {
+            showStillRunning();
+            return;
+        }
+        if (result.status === 'retry') {
+            retryProvisioning();
+            return;
+        }
         showNext(result.status === 'active');
     });
 
