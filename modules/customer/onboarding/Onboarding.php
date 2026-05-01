@@ -859,7 +859,7 @@ class Onboarding extends Trongate
     if (empty($token)) return 'API Token is required.';
     $this->module('cloud');
     if (!$this->cloud->hetzner($token)->validate_credentials()) {
-      return 'Invalid API token. Verify it has Read &amp; Write access in your Hetzner project.';
+      return 'Invalid API token. Verify it has Read & Write access in your Hetzner project.';
     }
     return true;
   }
