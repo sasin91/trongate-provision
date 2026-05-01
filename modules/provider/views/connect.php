@@ -39,7 +39,7 @@
         <div class="card-body" style="font-size:.82rem;color:#475569;line-height:1.7">
             <p>1. Your API token is <strong>validated</strong> against the Hetzner API.</p>
             <p>2. Your SSH public key is <strong>uploaded</strong> to Hetzner so your servers accept it immediately after provisioning.</p>
-            <p>3. Your token is <strong>encrypted</strong> (libsodium/XSalsa20) and stored. It is never logged or displayed in full.</p>
+            <p>3. Your token is <strong>encrypted</strong> and stored. It is never logged or displayed in full.</p>
             <p style="margin-top:.75rem">After connecting, the <strong>Create Server</strong> page will offer a <em>Hetzner Cloud</em> tab where you can pick a plan and region and provision a real server instantly.</p>
         </div>
     </div>

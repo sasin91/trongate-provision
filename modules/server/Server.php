@@ -581,7 +581,7 @@ class Server extends Trongate
       }
     }
 
-    $script = $exports . $this->_default_provision_script();
+    $script = str_replace(["\r\n", "\r"], "\n", $exports . $this->_default_provision_script());
     $timeout = RUNNER_SCRIPT_TIMEOUT;
 
     $cmd =
@@ -599,7 +599,7 @@ class Server extends Trongate
       $port .
       " " .
       escapeshellarg("{$user}@{$s->ip_address}") .
-      " 'timeout {$timeout} bash -s'";
+      " \"timeout {$timeout} bash -s\"";
 
     $provider = strtolower((string) ($s->provider ?? ""));
     $max_ssh_attempts = $provider === "hetzner" ? 20 : 3;
@@ -926,7 +926,7 @@ class Server extends Trongate
       $port .
       " " .
       escapeshellarg("{$user}@{$server->ip_address}") .
-      " 'timeout {$timeout} bash -s' 2>&1";
+      " \"timeout {$timeout} bash -s\" 2>&1";
 
     $proc = proc_open(
       $cmd,
@@ -937,7 +937,7 @@ class Server extends Trongate
       return [1, "Failed to open SSH connection."];
     }
 
-    fwrite($pipes[0], $script);
+    fwrite($pipes[0], str_replace(["\r\n", "\r"], "\n", $script));
     fclose($pipes[0]);
     $output = stream_get_contents($pipes[1]);
     fclose($pipes[1]);

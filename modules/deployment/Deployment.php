@@ -346,7 +346,7 @@ class Deployment extends Trongate
       $port .
       " " .
       escapeshellarg("{$user}@{$d->ip_address}") .
-      " 'timeout {$timeout} bash -s'";
+      " \"timeout {$timeout} bash -s\"";
 
     $proc = proc_open(
       $cmd,
@@ -360,7 +360,7 @@ class Deployment extends Trongate
       return;
     }
 
-    fwrite($pipes[0], $script);
+    fwrite($pipes[0], str_replace(["\r\n", "\r"], "\n", $script));
     fclose($pipes[0]);
 
     stream_set_blocking($pipes[1], false);

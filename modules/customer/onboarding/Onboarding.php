@@ -985,7 +985,7 @@ class Onboarding extends Trongate
       $port .
       ' ' .
       escapeshellarg("{$user}@{$server->ip_address}") .
-      " 'timeout {$timeout} bash -s' 2>&1";
+      " \"timeout {$timeout} bash -s\" 2>&1";
 
     $proc = proc_open(
       $cmd,
@@ -996,7 +996,7 @@ class Onboarding extends Trongate
       return [1, 'Failed to open SSH connection.'];
     }
 
-    fwrite($pipes[0], $script);
+    fwrite($pipes[0], str_replace(["\r\n", "\r"], "\n", $script));
     fclose($pipes[0]);
     $output = stream_get_contents($pipes[1]);
     fclose($pipes[1]);
@@ -1024,7 +1024,7 @@ class Onboarding extends Trongate
       $port .
       ' ' .
       escapeshellarg("{$user}@{$server->ip_address}") .
-      " 'timeout {$timeout} bash -s'";
+      " \"timeout {$timeout} bash -s\"";
 
     $proc = proc_open(
       $cmd,
@@ -1035,7 +1035,7 @@ class Onboarding extends Trongate
       return [1, 'Failed to open SSH connection.'];
     }
 
-    fwrite($pipes[0], $script);
+    fwrite($pipes[0], str_replace(["\r\n", "\r"], "\n", $script));
     fclose($pipes[0]);
 
     stream_set_blocking($pipes[1], false);

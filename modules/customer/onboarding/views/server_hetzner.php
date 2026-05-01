@@ -29,7 +29,7 @@
         </div>
         <div class="what-happens-item">
             <span class="check">&#10003;</span>
-            <span>Your token is <strong>encrypted</strong> with libsodium and stored — never logged in full</span>
+            <span>Your token is <strong>encrypted</strong> and stored - never logged in full</span>
         </div>
         <div class="what-happens-item">
             <span class="check">&#10148;</span>
