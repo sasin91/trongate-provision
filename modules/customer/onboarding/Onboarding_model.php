@@ -76,7 +76,17 @@ class Onboarding_model extends Model {
 
     function first_deployment(int $customer_id): object|false {
         $rows = $this->db->query_bind(
-            "SELECT * FROM deployment WHERE customer_id = :id ORDER BY id ASC LIMIT 1",
+            "SELECT * FROM deployment
+             WHERE customer_id = :id
+             ORDER BY
+                CASE status
+                    WHEN 'script_ready' THEN 0
+                    WHEN 'running' THEN 1
+                    WHEN 'success' THEN 2
+                    ELSE 3
+                END,
+                id DESC
+             LIMIT 1",
             ['id' => $customer_id],
             'object'
         );

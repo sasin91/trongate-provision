@@ -4,6 +4,7 @@ class Onboarding extends Trongate
 {
 
   private array $php_versions = ['8.4', '8.3', '8.2', '8.1', '8.0', '7.4'];
+  private const ZIP_RETENTION_SECONDS = 604800;
 
   // ── Router ──────────────────────────────────────────────────────
   //  Step 1 → ssh_key
@@ -868,6 +869,8 @@ class Onboarding extends Trongate
 
   function _store_zip(): string|false
   {
+    $this->_prune_zip_storage();
+
     if (empty($_FILES['zip_file']['tmp_name']) || $_FILES['zip_file']['error'] !== UPLOAD_ERR_OK) {
       return false;
     }
@@ -875,11 +878,55 @@ class Onboarding extends Trongate
       return false;
     }
     $hash = hash_file('sha256', $_FILES['zip_file']['tmp_name']);
-    $dest = '/tmp/provision_deploy_' . $hash . '.zip';
+    if ($hash === false) {
+      return false;
+    }
+    $dir = $this->_zip_storage_dir();
+    if (!is_dir($dir) && !mkdir($dir, 0700, true) && !is_dir($dir)) {
+      return false;
+    }
+    $deny = $dir . DIRECTORY_SEPARATOR . '.htaccess';
+    if (!file_exists($deny)) {
+      @file_put_contents($deny, "Require all denied\nDeny from all\n");
+    }
+    $dest = $dir . DIRECTORY_SEPARATOR . 'provision_deploy_' . $hash . '.zip';
     if (!move_uploaded_file($_FILES['zip_file']['tmp_name'], $dest)) {
       return false;
     }
     return $dest;
+  }
+
+  private function _zip_storage_dir(): string
+  {
+    return dirname(__DIR__, 3) . DIRECTORY_SEPARATOR . 'storage' . DIRECTORY_SEPARATOR . 'deploy_zips';
+  }
+
+  private function _prune_zip_storage(): void
+  {
+    $dir = $this->_zip_storage_dir();
+    if (!is_dir($dir)) {
+      return;
+    }
+
+    $keep = [];
+    $rows = $this->db->query_bind(
+      "SELECT zip_path FROM deployment WHERE zip_path IS NOT NULL AND status IN ('script_ready','running','failed')",
+      [],
+      'object',
+    );
+    foreach ($rows as $row) {
+      $keep[(string) $row->zip_path] = true;
+    }
+
+    foreach (glob($dir . DIRECTORY_SEPARATOR . '*.zip') ?: [] as $file) {
+      if (isset($keep[$file])) {
+        continue;
+      }
+      $mtime = filemtime($file);
+      if ($mtime !== false && time() - $mtime > self::ZIP_RETENTION_SECONDS) {
+        @unlink($file);
+      }
+    }
   }
 
   function _is_post(): bool

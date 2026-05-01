@@ -6,6 +6,9 @@ class Deployment extends Trongate
 {
   use Emits_events;
 
+  private const RUNNING_STALE_SECONDS = 120;
+  private const ZIP_RETENTION_SECONDS = 604800;
+
   function index(): void
   {
     $customer = $this->_require_customer();
@@ -277,10 +280,8 @@ class Deployment extends Trongate
       return;
     }
 
-    // Concurrent guard — prevent double-deploy
     if ($d->status === "running") {
-      $emit("Deployment is already running.");
-      $this->stream->done(["status" => "running", "sha" => null]);
+      $this->_wait_for_running_deployment($id, (int) $customer->id, $emit);
       return;
     }
 
@@ -292,6 +293,14 @@ class Deployment extends Trongate
     $script = $this->_render_deploy_script($d);
 
     // SCP zip if source is zip and file is present locally
+    if (($d->source_type ?? "") === "zip" && empty($d->zip_path)) {
+      $msg = "Deployment zip is missing from storage. Upload the zip again to retry.";
+      $emit($msg);
+      $this->stream->done(["status" => "missing_zip", "sha" => null]);
+      $this->model->finish($id, "failed", $msg, null);
+      return;
+    }
+
     if (!empty($d->zip_path) && file_exists($d->zip_path)) {
       $remote_zip = "/tmp/provision_deploy_" . $id . "_" . time() . ".zip";
       $emit("Uploading application zip…");
@@ -311,7 +320,6 @@ class Deployment extends Trongate
         " " .
         escapeshellarg("{$user}@{$d->ip_address}:{$remote_zip}");
       exec($scp . " 2>&1", $scp_out, $scp_code);
-      @unlink($d->zip_path); // local copy no longer needed
       if ($scp_code !== 0) {
         $msg = "SCP failed: " . implode("\n", $scp_out);
         $emit($msg);
@@ -328,6 +336,12 @@ class Deployment extends Trongate
         str_replace("'", "'\\''", $remote_zip) .
         "'\n" .
         $script;
+    } elseif (($d->source_type ?? "") === "zip") {
+      $msg = "Deployment zip was removed from storage. Upload the zip again to retry.";
+      $emit($msg);
+      $this->stream->done(["status" => "missing_zip", "sha" => null]);
+      $this->model->finish($id, "failed", $msg, null);
+      return;
     }
 
     $timeout = RUNNER_SCRIPT_TIMEOUT;
@@ -422,6 +436,9 @@ class Deployment extends Trongate
     $this->model->finish($id, $status, $log, $sha);
 
     if ($status === "success") {
+      if (!empty($d->zip_path) && file_exists($d->zip_path)) {
+        @unlink($d->zip_path);
+      }
       $this->_emit("DeploymentSucceeded", "deployment", $id, [
         "sha" => $sha,
         "source" => "stream",
@@ -434,6 +451,44 @@ class Deployment extends Trongate
     }
 
     $this->stream->done(["status" => $status, "sha" => $sha]);
+  }
+
+  private function _wait_for_running_deployment(int $id, int $customer_id, callable $emit): void
+  {
+    $stale_after = self::RUNNING_STALE_SECONDS;
+    $current = $this->model->get($id, $customer_id);
+    if ($current === false) {
+      $emit("Deployment not found.");
+      $this->stream->done(["status" => "failed", "sha" => null]);
+      return;
+    }
+
+    if ($current->status !== "running") {
+      $log = trim((string) ($current->run_log ?? ""));
+      if ($log !== "") {
+        $emit($this->_tail_text($log, 4000));
+      }
+      $this->stream->done([
+        "status" => $current->status,
+        "sha" => $current->deployed_sha ?? null,
+      ]);
+      return;
+    }
+
+    $started_at = strtotime((string) ($current->started_at ?? ""));
+    if ($started_at === false || time() - $started_at <= $stale_after) {
+      $this->stream->emit(json_encode([
+        "status" => "running",
+        "message" => "Deployment is already running.",
+      ]), "state");
+      $this->stream->done(["status" => "running", "sha" => null]);
+      return;
+    }
+
+    $message = "Deployment was left in running state for more than " . self::RUNNING_STALE_SECONDS . " seconds. It was marked failed so you can retry.";
+    $this->model->mark_stale_running_failed($id, $customer_id, $message);
+    $emit($message);
+    $this->stream->done(["status" => "failed", "sha" => null]);
   }
 
   function assign_script(): void
@@ -533,6 +588,9 @@ class Deployment extends Trongate
       return;
     }
     $snap = $this->model->get($id, (int) $customer->id);
+    if ($snap && !empty($snap->zip_path) && file_exists($snap->zip_path)) {
+      @unlink($snap->zip_path);
+    }
     $this->model->delete($id, (int) $customer->id);
     $this->_emit("DeploymentDeleted", "deployment", $id, [
       "repo_url" => $snap ? $snap->repo_url : null,
@@ -610,6 +668,11 @@ class Deployment extends Trongate
     ) === 1;
   }
 
+  private function _tail_text(string $message, int $length): string
+  {
+    return strlen($message) > $length ? "..." . substr($message, -$length) : $message;
+  }
+
   private function _env_server_allowed(
     int $env_id,
     int $server_id,
@@ -632,6 +695,8 @@ class Deployment extends Trongate
 
   private function _store_zip(): string|false
   {
+    $this->_prune_zip_storage();
+
     if (
       empty($_FILES["zip_file"]["tmp_name"]) ||
       $_FILES["zip_file"]["error"] !== UPLOAD_ERR_OK
@@ -645,11 +710,55 @@ class Deployment extends Trongate
       return false;
     }
     $hash = hash_file("sha256", $_FILES["zip_file"]["tmp_name"]);
-    $dest = "/tmp/provision_deploy_" . $hash . ".zip";
+    if ($hash === false) {
+      return false;
+    }
+    $dir = $this->_zip_storage_dir();
+    if (!is_dir($dir) && !mkdir($dir, 0700, true) && !is_dir($dir)) {
+      return false;
+    }
+    $deny = $dir . DIRECTORY_SEPARATOR . ".htaccess";
+    if (!file_exists($deny)) {
+      @file_put_contents($deny, "Require all denied\nDeny from all\n");
+    }
+    $dest = $dir . DIRECTORY_SEPARATOR . "provision_deploy_" . $hash . ".zip";
     if (!move_uploaded_file($_FILES["zip_file"]["tmp_name"], $dest)) {
       return false;
     }
     return $dest;
+  }
+
+  private function _zip_storage_dir(): string
+  {
+    return dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . "storage" . DIRECTORY_SEPARATOR . "deploy_zips";
+  }
+
+  private function _prune_zip_storage(): void
+  {
+    $dir = $this->_zip_storage_dir();
+    if (!is_dir($dir)) {
+      return;
+    }
+
+    $keep = [];
+    $rows = $this->db->query_bind(
+      "SELECT zip_path FROM deployment WHERE zip_path IS NOT NULL AND status IN ('script_ready','running','failed')",
+      [],
+      "object",
+    );
+    foreach ($rows as $row) {
+      $keep[(string) $row->zip_path] = true;
+    }
+
+    foreach (glob($dir . DIRECTORY_SEPARATOR . "*.zip") ?: [] as $file) {
+      if (isset($keep[$file])) {
+        continue;
+      }
+      $mtime = filemtime($file);
+      if ($mtime !== false && time() - $mtime > self::ZIP_RETENTION_SECONDS) {
+        @unlink($file);
+      }
+    }
   }
 
   private function _require_customer(): object

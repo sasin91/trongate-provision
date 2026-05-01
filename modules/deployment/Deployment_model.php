@@ -74,6 +74,15 @@ class Deployment_model extends Model {
         }
     }
 
+    function mark_stale_running_failed(int $id, int $customer_id, string $message): void {
+        $this->db->query_bind(
+            "UPDATE deployment
+             SET status='failed', run_log=:log, finished_at=NOW()
+             WHERE id=:id AND customer_id=:cid AND status='running'",
+            ['id' => $id, 'cid' => $customer_id, 'log' => $message]
+        );
+    }
+
     function assign_script(int $id, int $customer_id, ?int $script_id): void {
         $this->db->update($id, ['script_id' => $script_id], 'deployment');
     }

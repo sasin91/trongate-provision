@@ -84,9 +84,32 @@
         log.scrollTop = log.scrollHeight;
     };
 
+    es.addEventListener('state', function (e) {
+        var state = JSON.parse(e.data);
+        if (state.status === 'running') {
+            log.textContent += state.message + '\n';
+            log.scrollTop = log.scrollHeight;
+            msg.textContent = 'Deployment is still running. Checking again shortly...';
+        }
+    });
+
     es.addEventListener('done', function (e) {
         es.close();
         var result = JSON.parse(e.data);
+        if (result.status === 'running') {
+            msg.textContent = 'Deployment is still running. Checking again shortly...';
+            window.setTimeout(function () {
+                window.location.reload();
+            }, 5000);
+            return;
+        }
+        if (result.status === 'missing_zip') {
+            msg.textContent = 'The uploaded zip is no longer available. Upload it again to retry.';
+            finish.querySelector('.btn-primary').href = 'customer-onboarding/register_deployment';
+            finish.querySelector('.btn-primary').textContent = 'Upload zip again';
+            finish.style.display = '';
+            return;
+        }
         if (result.status === 'success') {
             msg.textContent = '✓ Deployment complete!';
             fetch('<?= BASE_URL ?>customer-onboarding/complete', {
