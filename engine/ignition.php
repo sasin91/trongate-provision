@@ -1,6 +1,27 @@
 <?php
 session_start();
 
+function load_env_file(string $path): void {
+    if (!is_readable($path)) {
+        return;
+    }
+
+    $values = parse_ini_file($path, false, INI_SCANNER_RAW);
+    if ($values === false) {
+        return;
+    }
+
+    foreach ($values as $name => $value) {
+        if (getenv($name) !== false) {
+            continue;
+        }
+
+        putenv($name . '=' . $value);
+    }
+}
+
+load_env_file(dirname(__DIR__) . '/.env');
+
 // Config files
 require_once '../config/config.php';
 require_once '../config/custom_routing.php';

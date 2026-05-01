@@ -14,6 +14,6 @@ define('ENCRYPTION_KEY', getenv('PROVISION_ENCRYPTION_KEY') ?: 'ch4ng3-th1s-k3y-
 // Copy the private key: sudo cp ~/.ssh/id_ed25519 /var/www/.ssh/id_ed25519
 //                       sudo chown www-data:www-data /var/www/.ssh/id_ed25519 && sudo chmod 400 /var/www/.ssh/id_ed25519
 // Add the public key to authorized_keys on each target server.
-define('RUNNER_SSH_KEY', '/var/www/.ssh/id_ed25519');
+define('RUNNER_SSH_KEY', getenv('RUNNER_SSH_KEY') ?: '~/.ssh/id_ed25519');
 
 define('RUNNER_SCRIPT_TIMEOUT', 3600);
