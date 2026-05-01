@@ -20,7 +20,7 @@
         <?= form_close() ?>
         <a href="environment-services/create?environment=<?= $deployment->env_id ?>" class="btn btn-secondary">+ Service</a>
         <?php if ($deployment->status !== 'running'): ?>
-            <button id="deploy-btn" class="btn btn-primary" data-stream-url="deployment/stream/<?= $deployment->id ?>" onclick="startDeploy(<?= $deployment->id ?>)">&#9654; Deploy</button>
+            <button type="button" id="deploy-btn" class="btn btn-primary" data-stream-url="<?= BASE_URL ?>deployment/stream/<?= $deployment->id ?>" onclick="startDeploy(<?= $deployment->id ?>)">&#9654; Deploy</button>
         <?php endif; ?>
         <?php if ((int)($deployment->is_canary ?? 0) === 1 && $deployment->status === 'success'): ?>
             <?= form_open('deployment/promote_canary/' . $deployment->id, ['style' => 'display:inline;margin:0']) ?>

@@ -6,11 +6,17 @@ function startDeploy(id) {
     const log = document.getElementById('live-log');
     const badge = document.getElementById('live-status-badge');
 
+    if (!btn || !panel || !log || !badge) return;
+
     btn.disabled = true;
     btn.textContent = 'Deploying...';
     log.textContent = '';
-    panel.style.display = '';
-    panel.scrollIntoView({behavior: 'smooth', block: 'start'});
+    panel.style.display = 'block';
+    panel.querySelector('.card-title').textContent = 'Deploying...';
+    badge.innerHTML = '<span class="badge badge-running">running</span>';
+    requestAnimationFrame(function () {
+        panel.scrollIntoView({behavior: 'smooth', block: 'start'});
+    });
 
     const es = new EventSource(btn.dataset.streamUrl || ('deployment/stream/' + id));
 
