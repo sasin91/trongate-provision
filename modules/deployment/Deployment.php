@@ -83,6 +83,13 @@ class Deployment extends Trongate
               $_SESSION["flash_error"] = "Zip upload failed or missing.";
               goto render_create;
             }
+          } elseif ($source_type === "git") {
+            // Attempt to pull release zip from GitHub/GitLab.
+            // On failure, zip_path stays null → remote falls back to git clone.
+            $zip_path = $this->_fetch_zip_from_provider(
+              (string) post("repo_url", true),
+              (string) post("branch", true),
+            );
           }
 
           $id = $this->model->create([
@@ -1065,5 +1072,56 @@ class Deployment extends Trongate
     $this->module("customer");
     $this->customer->_require_onboarded();
     return $this->customer->_require_customer();
+  }
+
+  private function _get_provider_archive_url(string $repo_url, string $branch): string|false
+  {
+    $b = rawurlencode($branch);
+    if (preg_match('#(?:https?://|git@)github\.com[:/](.+?)(?:\.git)?/?$#i', $repo_url, $m)) {
+      return 'https://github.com/' . trim($m[1], '/') . '/archive/refs/heads/' . $b . '.zip';
+    }
+    if (preg_match('#(?:https?://|git@)gitlab\.com[:/](.+?)(?:\.git)?/?$#i', $repo_url, $m)) {
+      $slug = trim($m[1], '/');
+      $name = basename($slug);
+      return "https://gitlab.com/{$slug}/-/archive/{$b}/{$name}-{$b}.zip";
+    }
+    return false;
+  }
+
+  private function _fetch_zip_from_provider(string $repo_url, string $branch): string|false
+  {
+    $archive_url = $this->_get_provider_archive_url($repo_url, $branch);
+    if ($archive_url === false) {
+      return false;
+    }
+
+    $ch = curl_init($archive_url);
+    curl_setopt_array($ch, [
+      CURLOPT_RETURNTRANSFER => true,
+      CURLOPT_FOLLOWLOCATION => true,
+      CURLOPT_MAXREDIRS      => 5,
+      CURLOPT_TIMEOUT        => 60,
+      CURLOPT_USERAGENT      => 'Provision-Deploy/1.0',
+      CURLOPT_SSL_VERIFYPEER => true,
+    ]);
+    $data      = curl_exec($ch);
+    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($data === false || $http_code !== 200 || strlen($data) < 100) {
+      return false;
+    }
+
+    $hash = hash('sha256', $data);
+    $dir  = $this->_zip_storage_dir();
+    if (!is_dir($dir) && !mkdir($dir, 0700, true) && !is_dir($dir)) {
+      return false;
+    }
+    $deny = $dir . DIRECTORY_SEPARATOR . '.htaccess';
+    if (!file_exists($deny)) {
+      @file_put_contents($deny, "Require all denied\nDeny from all\n");
+    }
+    $dest = $dir . DIRECTORY_SEPARATOR . 'provision_deploy_' . $hash . '.zip';
+    return file_put_contents($dest, $data) !== false ? $dest : false;
   }
 }

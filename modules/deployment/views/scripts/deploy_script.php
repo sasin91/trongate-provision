@@ -13,6 +13,10 @@
 $d = $deployment;
 
 $source = $d->source_type ?? "git";
+// Provider-fetched zip: SCP'd by stream(), treat as zip on remote.
+if ($source === "git" && !empty($d->zip_path)) {
+  $source = "zip";
+}
 $repo = $d->repo_url ?? "";
 $branch = $d->branch ?? "main";
 $zip_url = ""; // zip lives in /tmp, transferred via SCP — not a public URL
