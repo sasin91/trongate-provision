@@ -32,7 +32,6 @@ $PROVISION_USER ALL=(ALL) NOPASSWD: /usr/bin/systemctl reload apache2
 $PROVISION_USER ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart apache2
 $PROVISION_USER ALL=(ALL) NOPASSWD: /usr/bin/mkdir -p /var/www, /usr/bin/mkdir -p /var/www/*
 $PROVISION_USER ALL=(ALL) NOPASSWD: /usr/bin/install -d -m 0755 -o $PROVISION_USER -g $PROVISION_USER /var/www/releases/*
-$PROVISION_USER ALL=(ALL) NOPASSWD: /usr/bin/mv -Tf /tmp/provision_promote_* /var/www/*, /usr/bin/mv -Tf /tmp/provision_demote_* /var/www/*
 $PROVISION_USER ALL=(ALL) NOPASSWD: /usr/bin/chgrp -R www-data /var/www, /usr/bin/chgrp -R www-data /var/www/*
 $PROVISION_USER ALL=(ALL) NOPASSWD: /usr/bin/tee /etc/apache2/sites-available/*.conf
 $PROVISION_USER ALL=(ALL) NOPASSWD: /usr/bin/a2ensite *
