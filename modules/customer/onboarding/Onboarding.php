@@ -879,13 +879,10 @@ class Onboarding extends Trongate
     if ($hash === false) {
       return false;
     }
-    $dir = $this->_zip_storage_dir();
-    if (!is_dir($dir) && !mkdir($dir, 0700, true) && !is_dir($dir)) {
+    $this->module('storage');
+    $dir = $this->storage->ensure_dir('deploy_zips');
+    if ($dir === false) {
       return false;
-    }
-    $deny = $dir . DIRECTORY_SEPARATOR . '.htaccess';
-    if (!file_exists($deny)) {
-      @file_put_contents($deny, "Require all denied\nDeny from all\n");
     }
     $dest = $dir . DIRECTORY_SEPARATOR . 'provision_deploy_' . $hash . '.zip';
     if (!move_uploaded_file($_FILES['zip_file']['tmp_name'], $dest)) {
@@ -894,15 +891,10 @@ class Onboarding extends Trongate
     return $dest;
   }
 
-  private function _zip_storage_dir(): string
-  {
-    return dirname(__DIR__, 3) . DIRECTORY_SEPARATOR . 'storage' . DIRECTORY_SEPARATOR . 'deploy_zips';
-  }
-
   private function _prune_zip_storage(): void
   {
-    $dir = $this->_zip_storage_dir();
-    if (!is_dir($dir)) {
+    $this->module('storage');
+    if (!is_dir($this->storage->path('deploy_zips'))) {
       return;
     }
 
@@ -916,7 +908,7 @@ class Onboarding extends Trongate
       $keep[(string) $row->zip_path] = true;
     }
 
-    foreach (glob($dir . DIRECTORY_SEPARATOR . '*.zip') ?: [] as $file) {
+    foreach ($this->storage->glob('deploy_zips/*.zip') as $file) {
       if (isset($keep[$file])) {
         continue;
       }

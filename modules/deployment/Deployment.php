@@ -202,6 +202,7 @@ class Deployment extends Trongate
     $id = (int) segment(3);
     $this->module("stream");
     $this->stream->start();
+    $this->module("ssh");
     $emit = function (string $line, string $event = ""): void {
       $this->stream->emit($line, $event);
     };
@@ -305,9 +306,9 @@ class Deployment extends Trongate
         escapeshellarg($d->zip_path) .
         " " .
         escapeshellarg("{$user}@{$d->ip_address}:{$remote_zip}");
-      exec($scp . " 2>&1", $scp_out, $scp_code);
-      if ($scp_code !== 0) {
-        $msg = "SCP failed: " . implode("\n", $scp_out);
+      $scp_result = $this->ssh->scp_upload($d->zip_path, $d->ip_address, $user, $port, $remote_zip);
+      if (!$scp_result['success']) {
+        $msg = "SCP failed: " . $scp_result['output'];
         $emit($msg);
         $this->stream->done(["status" => "failed", "sha" => null]);
         $this->model->finish($id, "failed", $msg, null);
@@ -330,87 +331,19 @@ class Deployment extends Trongate
       return;
     }
 
-    $timeout = RUNNER_SCRIPT_TIMEOUT;
-    $cmd =
-      "ssh" .
-      " -i " .
-      escapeshellarg(RUNNER_SSH_KEY) .
-      " -o StrictHostKeyChecking=accept-new" .
-      " -o UserKnownHostsFile=/dev/null" .
-      " -o LogLevel=ERROR" .
-      " -o BatchMode=yes" .
-      " -o ConnectTimeout=15" .
-      " -o ServerAliveInterval=30" .
-      " -o ServerAliveCountMax=3" .
-      " -p " .
-      $port .
-      " " .
-      escapeshellarg("{$user}@{$d->ip_address}") .
-      " \"timeout {$timeout} bash -s\"";
-
-    $proc = proc_open(
-      $cmd,
-      [0 => ["pipe", "r"], 1 => ["pipe", "w"], 2 => ["pipe", "w"]],
-      $pipes,
+    $log  = '';
+    $exit_code = $this->ssh->execute_script(
+      $d->ip_address,
+      $user,
+      $port,
+      $script,
+      function (string $line) use (&$log, $emit): void {
+        $log .= $line . "\n";
+        $emit($line);
+      },
+      fn() => $this->stream->ping(),
+      RUNNER_SCRIPT_TIMEOUT,
     );
-    if (!is_resource($proc)) {
-      $emit("Failed to open SSH connection.");
-      $this->stream->done(["status" => "failed", "sha" => null]);
-      $this->model->finish($id, "failed", "proc_open failed.", null);
-      return;
-    }
-
-    fwrite($pipes[0], str_replace(["\r\n", "\r"], "\n", $script));
-    fclose($pipes[0]);
-
-    stream_set_blocking($pipes[1], false);
-    stream_set_blocking($pipes[2], false);
-
-    $log = "";
-    $open = [1 => $pipes[1], 2 => $pipes[2]];
-    $buf = [1 => "", 2 => ""];
-
-    while (!empty($open)) {
-      $read = array_values($open);
-      $w = $e = null;
-      $n = stream_select($read, $w, $e, 15);
-      if ($n === false) {
-        break;
-      }
-      if ($n === 0) {
-        $this->stream->ping();
-        continue;
-      }
-
-      foreach ($read as $fh) {
-        $chunk = fread($fh, 4096);
-        if ($chunk !== false && $chunk !== "") {
-          $key = $fh === $pipes[1] ? 1 : 2;
-          $buf[$key] .= $chunk;
-          $log .= $chunk;
-          // Emit complete lines only
-          while (($nl = strpos($buf[$key], "\n")) !== false) {
-            $line = substr($buf[$key], 0, $nl);
-            $buf[$key] = substr($buf[$key], $nl + 1);
-            if ($line !== "") {
-              $emit(rtrim($line, "\r"));
-            }
-          }
-        }
-        if (feof($fh)) {
-          $key = $fh === $pipes[1] ? 1 : 2;
-          if ($buf[$key] !== "") {
-            $emit(rtrim($buf[$key], "\r\n"));
-            $buf[$key] = "";
-          }
-          $open = array_filter($open, static fn($p) => $p !== $fh);
-        }
-      }
-    }
-
-    fclose($pipes[1]);
-    fclose($pipes[2]);
-    $exit_code = proc_close($proc);
     $log = trim($log);
 
     $sha = null;
@@ -845,42 +778,23 @@ class Deployment extends Trongate
       return ["exit_code" => 1, "log" => "Invalid SSH user."];
     }
 
-    $timeout = RUNNER_SCRIPT_TIMEOUT;
-    $cmd =
-      "ssh" .
-      " -i " .
-      escapeshellarg(RUNNER_SSH_KEY) .
-      " -o StrictHostKeyChecking=accept-new" .
-      " -o UserKnownHostsFile=/dev/null" .
-      " -o LogLevel=ERROR" .
-      " -o BatchMode=yes" .
-      " -o ConnectTimeout=15" .
-      " -p " .
-      $port .
-      " " .
-      escapeshellarg("{$user}@{$d->ip_address}") .
-      " \"timeout {$timeout} bash -s\"";
-
-    $proc = proc_open(
-      $cmd,
-      [0 => ["pipe", "r"], 1 => ["pipe", "w"], 2 => ["pipe", "w"]],
-      $pipes,
+    $this->module("ssh");
+    $log = '';
+    $exit_code = $this->ssh->execute_script(
+      $d->ip_address,
+      $user,
+      $port,
+      $script,
+      function (string $line) use (&$log): void {
+        $log .= $line . "\n";
+      },
+      null,
+      RUNNER_SCRIPT_TIMEOUT,
     );
-    if (!is_resource($proc)) {
-      return ["exit_code" => 1, "log" => "Failed to open SSH connection."];
-    }
-
-    fwrite($pipes[0], str_replace(["\r\n", "\r"], "\n", $script));
-    fclose($pipes[0]);
-    $stdout = stream_get_contents($pipes[1]);
-    $stderr = stream_get_contents($pipes[2]);
-    fclose($pipes[1]);
-    fclose($pipes[2]);
-    $exit_code = proc_close($proc);
 
     return [
       "exit_code" => $exit_code,
-      "log" => trim((string) $stdout . "\n" . (string) $stderr),
+      "log" => trim($log),
     ];
   }
 
@@ -1019,13 +933,10 @@ class Deployment extends Trongate
     if ($hash === false) {
       return false;
     }
-    $dir = $this->_zip_storage_dir();
-    if (!is_dir($dir) && !mkdir($dir, 0700, true) && !is_dir($dir)) {
+    $this->module("storage");
+    $dir = $this->storage->ensure_dir("deploy_zips");
+    if ($dir === false) {
       return false;
-    }
-    $deny = $dir . DIRECTORY_SEPARATOR . ".htaccess";
-    if (!file_exists($deny)) {
-      @file_put_contents($deny, "Require all denied\nDeny from all\n");
     }
     $dest = $dir . DIRECTORY_SEPARATOR . "provision_deploy_" . $hash . ".zip";
     if (!move_uploaded_file($_FILES["zip_file"]["tmp_name"], $dest)) {
@@ -1034,15 +945,10 @@ class Deployment extends Trongate
     return $dest;
   }
 
-  private function _zip_storage_dir(): string
-  {
-    return dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . "storage" . DIRECTORY_SEPARATOR . "deploy_zips";
-  }
-
   private function _prune_zip_storage(): void
   {
-    $dir = $this->_zip_storage_dir();
-    if (!is_dir($dir)) {
+    $this->module("storage");
+    if (!is_dir($this->storage->path("deploy_zips"))) {
       return;
     }
 
@@ -1056,7 +962,7 @@ class Deployment extends Trongate
       $keep[(string) $row->zip_path] = true;
     }
 
-    foreach (glob($dir . DIRECTORY_SEPARATOR . "*.zip") ?: [] as $file) {
+    foreach ($this->storage->glob("deploy_zips/*.zip") as $file) {
       if (isset($keep[$file])) {
         continue;
       }
@@ -1118,16 +1024,7 @@ class Deployment extends Trongate
       return false;
     }
 
-    $hash = hash('sha256', $data);
-    $dir  = $this->_zip_storage_dir();
-    if (!is_dir($dir) && !mkdir($dir, 0700, true) && !is_dir($dir)) {
-      return false;
-    }
-    $deny = $dir . DIRECTORY_SEPARATOR . '.htaccess';
-    if (!file_exists($deny)) {
-      @file_put_contents($deny, "Require all denied\nDeny from all\n");
-    }
-    $dest = $dir . DIRECTORY_SEPARATOR . 'provision_deploy_' . $hash . '.zip';
-    return file_put_contents($dest, $data) !== false ? $dest : false;
+    $this->module("storage");
+    return $this->storage->put('deploy_zips/provision_deploy_' . hash('sha256', $data) . '.zip', $data);
   }
 }

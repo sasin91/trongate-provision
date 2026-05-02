@@ -1,5 +1,6 @@
 id_ed25519
 id_ed25519.pub
 .env
-storage/deploy_zips/*.zip
+modules/storage/deploy_zips/*.zip
+/storage/
 .worktrees/
