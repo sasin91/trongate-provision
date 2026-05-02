@@ -1,0 +1,156 @@
+body {
+  justify-content: flex-start;
+  padding: 2rem 1rem;
+  box-sizing: border-box;
+}
+
+.deployment-wizard-card {
+  max-width: 720px;
+}
+
+.wizard-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.wizard-panel {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+  background: #ffffff;
+}
+
+.wizard-panel.is-muted {
+  background: #f8fafc;
+  color: #64748b;
+}
+
+.wizard-panel h2 {
+  font-size: .9rem;
+  margin: 0 0 .5rem;
+}
+
+.wizard-panel p {
+  margin: 0;
+  font-size: .82rem;
+  color: #64748b;
+  line-height: 1.6;
+}
+
+.source-options {
+  display: flex;
+  gap: 1.25rem;
+  margin-top: .25rem;
+}
+
+.server-lock-hint {
+  display: none;
+  color: #6366f1;
+  font-size: .78rem;
+  margin-top: .25rem;
+}
+
+.form-actions {
+  display: flex;
+  gap: .75rem;
+  align-items: center;
+}
+
+.form-actions .btn-primary,
+.form-actions .btn-secondary-onboarding {
+  width: auto;
+  flex: 1;
+}
+
+.log-pre {
+  max-height: 240px;
+  margin-bottom: 0;
+}
+
+.sql-list {
+  display: flex;
+  flex-direction: column;
+  gap: .75rem;
+  margin-top: .875rem;
+}
+
+.sql-details {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.sql-details summary {
+  cursor: pointer;
+  padding: .75rem .875rem;
+  font-size: .82rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.sql-details pre {
+  margin: 0;
+  padding: .875rem;
+  border-top: 1px solid #e2e8f0;
+  max-height: 260px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: #0f172a;
+  color: #e2e8f0;
+  font-size: .75rem;
+  line-height: 1.55;
+}
+
+.sql-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: .625rem .875rem;
+  border-top: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.sql-actions button {
+  width: auto;
+  padding: .45rem .75rem;
+}
+
+.status-msg {
+  text-align: left;
+  margin-bottom: 0;
+}
+
+.is-hidden {
+  display: none !important;
+}
+
+@media (max-width: 640px) {
+  body {
+    padding: 0;
+  }
+
+  .onboarding-card {
+    min-height: 100vh;
+    border-radius: 0;
+    padding: 1.5rem;
+    box-sizing: border-box;
+  }
+
+  .form-row,
+  .form-actions {
+    grid-template-columns: 1fr;
+    flex-direction: column;
+  }
+
+  .form-actions .btn-primary,
+  .form-actions .btn-secondary-onboarding {
+    width: 100%;
+  }
+
+  .source-options {
+    flex-direction: column;
+    gap: .5rem;
+  }
+}

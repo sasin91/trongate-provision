@@ -309,8 +309,6 @@ class Onboarding extends Trongate
         'repo_url'       => $source_type === 'git' ? post('repo_url', true) : null,
         'branch'         => $source_type === 'git' ? post('branch', true)   : null,
         'zip_path'       => $zip_path,
-        'is_canary'      => 0,
-        'canary_weight'  => 100,
         'status'         => 'script_ready',
       ]);
 
@@ -789,7 +787,7 @@ class Onboarding extends Trongate
 
     $this->module('deployment');
     $deployment = $this->deployment->model->get((int) $deployment->id, (int) $customer->id);
-    if ($deployment === false || $deployment->status !== 'success') {
+    if ($deployment === false || !in_array($deployment->status, ['staged', 'success'], true)) {
       http_response_code(409);
       return;
     }

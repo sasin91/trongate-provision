@@ -110,14 +110,14 @@
             finish.style.display = '';
             return;
         }
-        if (result.status === 'success') {
-            msg.textContent = '✓ Deployment complete!';
+        if (result.status === 'staged') {
+            msg.textContent = 'Release staged. Open the deployment page to update the database and promote it.';
             fetch('<?= BASE_URL ?>customer-onboarding/complete', {
                 method: 'POST',
                 credentials: 'same-origin',
                 headers: {'X-Requested-With': 'XMLHttpRequest'}
             }).catch(function () {
-                msg.textContent = 'Deployment complete. Refresh once before opening the dashboard.';
+                msg.textContent = 'Release staged. Refresh once before opening the dashboard.';
             });
         } else {
             msg.textContent = '✗ Deployment failed — you can retry from the deployment page.';

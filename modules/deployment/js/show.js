@@ -28,17 +28,22 @@ function startDeploy(id) {
     es.addEventListener('done', function (event) {
         es.close();
         const result = JSON.parse(event.data);
-        const ok = result.status === 'success';
+        const ok = result.status === 'staged';
 
-        panel.querySelector('.card-title').textContent = ok ? 'Deploy complete' : 'Deploy failed';
+        panel.querySelector('.card-title').textContent = ok ? 'Release staged' : 'Deploy failed';
         badge.innerHTML = ok
-            ? '<span class="badge badge-active">success</span>'
+            ? '<span class="badge badge-staged">staged</span>'
             : '<span class="badge badge-failed">failed</span>';
 
         const statusBadge = document.querySelector('.detail-item .badge[class*="badge-"]');
         if (statusBadge) {
-            statusBadge.className = 'badge badge-' + (ok ? 'active' : 'failed');
+            statusBadge.className = 'badge badge-' + (ok ? 'staged' : 'failed');
             statusBadge.textContent = result.status;
+        }
+
+        const promoteForm = document.getElementById('promote-release-form');
+        if (promoteForm) {
+            promoteForm.style.display = ok && result.release_path ? 'inline' : 'none';
         }
 
         btn.disabled = false;

@@ -12,12 +12,6 @@ function copyScript(elementId) {
     });
 }
 
-// Deployment create — canary weight toggle
-function toggleCanary(checked) {
-    const group = document.getElementById('canary-weight-group');
-    if (group) group.style.display = checked ? '' : 'none';
-}
-
 // Auto-refresh countdown — reads from <span id="countdown" data-secs="10">
 document.addEventListener('DOMContentLoaded', function () {
     const el = document.getElementById('countdown');

@@ -7,12 +7,7 @@
             <span class="breadcrumb-sep">/</span>
             #<?= $deployment->id ?>
         </div>
-        <div class="page-title">
-            Deployment #<?= $deployment->id ?>
-            <?php if ((int)($deployment->is_canary ?? 0) === 1): ?>
-                <span class="badge badge-development" style="vertical-align:middle;font-size:.65rem;margin-left:.5rem">&#9670; Canary <?= (int)$deployment->canary_weight ?>%</span>
-            <?php endif; ?>
-        </div>
+        <div class="page-title">Deployment #<?= $deployment->id ?></div>
     </div>
     <div class="actions-row">
         <?= form_open('server-health/check/deployment/' . $deployment->id, ['style' => 'display:inline;margin:0']) ?>
@@ -22,14 +17,16 @@
         <?php if ($deployment->status !== 'running'): ?>
             <button type="button" id="deploy-btn" class="btn btn-primary" data-stream-url="<?= BASE_URL ?>deployment/stream/<?= $deployment->id ?>" onclick="startDeploy(<?= $deployment->id ?>)">&#9654; Deploy</button>
         <?php endif; ?>
-        <?php if ((int)($deployment->is_canary ?? 0) === 1 && $deployment->status === 'success'): ?>
-            <?= form_open('deployment/promote_canary/' . $deployment->id, ['style' => 'display:inline;margin:0']) ?>
-            <button type="submit" class="btn btn-secondary" onclick="return confirm('Promote canary to full traffic?')">&#8679; Promote</button>
-            <?= form_close() ?>
-        <?php elseif ($deployment->status !== 'running'): ?>
-            <?= form_open('deployment/mark_success/' . $deployment->id, ['style' => 'display:inline-flex;gap:.4rem;align-items:center;margin:0']) ?>
-            <input type="text" name="deployed_sha" class="form-control" style="width:150px;font-family:monospace;font-size:.78rem;padding:.3rem .5rem" placeholder="git SHA (optional)" maxlength="40">
-            <button type="submit" class="btn btn-secondary">Mark Successful</button>
+        <?php $show_promote = $deployment->status === 'staged'; ?>
+        <?= form_open('deployment/promote_release/' . $deployment->id, [
+            'id' => 'promote-release-form',
+            'style' => 'display:' . ($show_promote ? 'inline' : 'none') . ';margin:0'
+        ]) ?>
+            <button type="submit" class="btn btn-primary" onclick="return confirm('Promote this staged release to live?')">&#8679; Promote release</button>
+        <?= form_close() ?>
+        <?php if ($deployment->status === 'success' && !empty($deployment->previous_release_path)): ?>
+            <?= form_open('deployment/demote_release/' . $deployment->id, ['style' => 'display:inline;margin:0']) ?>
+            <button type="submit" class="btn btn-secondary" onclick="return confirm('Demote this live release and restore the previous release?')">&#8634; Demote</button>
             <?= form_close() ?>
         <?php endif; ?>
         <?= form_open('deployment/delete/' . $deployment->id, ['style' => 'display:inline;margin:0']) ?>
@@ -63,6 +60,18 @@
         <label>Web root</label>
         <span><code><?= htmlspecialchars($deployment->web_root) ?></code></span>
     </div>
+    <?php if (!empty($deployment->release_path)): ?>
+    <div class="detail-item">
+        <label>Release path</label>
+        <span><code><?= htmlspecialchars($deployment->release_path) ?></code></span>
+    </div>
+    <?php endif; ?>
+    <?php if (!empty($deployment->previous_release_path)): ?>
+    <div class="detail-item">
+        <label>Previous release</label>
+        <span><code><?= htmlspecialchars($deployment->previous_release_path) ?></code></span>
+    </div>
+    <?php endif; ?>
     <?php if ($deployment->domain): ?>
     <div class="detail-item">
         <label>Domain</label>
@@ -97,6 +106,18 @@
         <span><?= date('M j, Y H:i:s', strtotime($deployment->finished_at)) ?></span>
     </div>
     <?php endif; ?>
+    <?php if (!empty($deployment->promoted_at)): ?>
+    <div class="detail-item">
+        <label>Promoted</label>
+        <span><?= date('M j, Y H:i:s', strtotime($deployment->promoted_at)) ?></span>
+    </div>
+    <?php endif; ?>
+    <?php if (!empty($deployment->demoted_at)): ?>
+    <div class="detail-item">
+        <label>Demoted</label>
+        <span><?= date('M j, Y H:i:s', strtotime($deployment->demoted_at)) ?></span>
+    </div>
+    <?php endif; ?>
     <?php if (!empty($latest_health)): ?>
     <div class="detail-item">
         <label>Last health check</label>
@@ -114,38 +135,17 @@
     <div class="card-header">
         <div>
             <span class="card-title">Deployment Script Preview</span>
-            <?php if (!empty($deployment->script_name)): ?>
-                <span style="margin-left:.6rem;font-size:.78rem;color:#6366f1">using: <strong><?= htmlspecialchars($deployment->script_name) ?></strong></span>
-            <?php else: ?>
-                <span style="margin-left:.6rem;font-size:.78rem;color:#94a3b8">default generated</span>
-            <?php endif; ?>
+            <span style="margin-left:.6rem;font-size:.78rem;color:#94a3b8">generated staged release script</span>
         </div>
         <div class="actions-row">
             <button onclick="copyScript('deploy-script')" class="btn btn-secondary btn-sm">Copy</button>
         </div>
     </div>
-    <!-- Script assignment -->
-    <div style="padding:.75rem 1.25rem;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
-        <span style="font-size:.8rem;color:#64748b;white-space:nowrap">Custom script:</span>
-        <?= form_open('deployment/assign_script/' . $deployment->id, ['style' => 'display:flex;gap:.5rem;align-items:center;flex:1']) ?>
-            <select name="script_id" class="form-control" style="max-width:260px;padding:.35rem .6rem;font-size:.82rem">
-                <option value="">— default generated script —</option>
-                <?php foreach ($deploy_scripts as $sc): ?>
-                    <option value="<?= $sc->id ?>" <?= (int)($deployment->script_id ?? 0) === (int)$sc->id ? 'selected' : '' ?>><?= htmlspecialchars($sc->name) ?></option>
-                <?php endforeach; ?>
-            </select>
-            <?php if (empty($deploy_scripts)): ?>
-                <a href="script/create?type=deploy" class="btn btn-secondary btn-sm" style="white-space:nowrap">+ Create Script</a>
-            <?php endif; ?>
-            <button type="submit" class="btn btn-secondary btn-sm">Apply</button>
-        <?= form_close() ?>
-    </div>
     <div class="card-body" style="padding:0">
         <div class="code-block" id="deploy-script"><?= htmlspecialchars($deploy_script) ?></div>
     </div>
     <div style="padding:.75rem 1.25rem;border-top:1px solid #e2e8f0;font-size:.8rem;color:#64748b">
-        Secret values are redacted in this browser preview. Use <strong>Deploy</strong> to run the unredacted script server-side on <strong><?= htmlspecialchars($deployment->server_name) ?></strong>.
-        For manual deployments, use the environment variables screen to copy credentials directly.
+        Secret values are redacted in this browser preview. Use <strong>Deploy</strong> to stage the release on <strong><?= htmlspecialchars($deployment->server_name) ?></strong>, then update the database manually before promoting.
     </div>
 </div>
 
@@ -163,7 +163,7 @@
 
 <script src="deployment_module/js/show.js"></script>
 
-<?php if (in_array($deployment->status, ['running', 'success', 'failed'], true)): ?>
+<?php if (in_array($deployment->status, ['running', 'staged', 'success', 'failed'], true)): ?>
 <div class="card">
     <div class="card-header">
         <span class="card-title">Run Log</span>
@@ -172,6 +172,8 @@
                 <span class="badge badge-running">running</span>
             <?php elseif ($deployment->status === 'success'): ?>
                 <span class="badge badge-active">success</span>
+            <?php elseif ($deployment->status === 'staged'): ?>
+                <span class="badge badge-staged">staged</span>
             <?php else: ?>
                 <span class="badge badge-failed">failed</span>
             <?php endif; ?>
@@ -187,11 +189,11 @@
 </div>
 <?php endif; ?>
 
-<?php if (!empty($deployment->db_name) && $deployment->status === 'success'): ?>
+<?php if (!empty($deployment->db_name) && in_array($deployment->status, ['staged', 'success'], true)): ?>
 <div class="card">
     <div class="card-header">
         <span class="card-title">Database Access</span>
-        <span style="font-size:.78rem;color:#64748b">SSH tunnel to MySQL — CLI or TablePlus</span>
+        <span style="font-size:.78rem;color:#64748b"><?= $deployment->status === 'staged' ? 'Update before promoting' : 'SSH tunnel to MySQL — CLI or TablePlus' ?></span>
     </div>
     <div class="card-body" style="display:flex;flex-direction:column;gap:1.25rem">
 

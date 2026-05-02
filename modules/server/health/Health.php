@@ -40,10 +40,10 @@ class Health extends Trongate
     }
 
     if ($type === 'deployment') {
-      $this->_check_deployment($target_id, (int) $customer->id);
+      $this->check_deployment_result($target_id, (int) $customer->id);
       redirect('deployment/show/' . $target_id);
     } elseif ($type === 'service') {
-      $this->_check_service($target_id, (int) $customer->id);
+      $this->check_service_result($target_id, (int) $customer->id);
       redirect('environment-services/show/' . $target_id);
     } else {
       redirect('server-health/health');
@@ -66,7 +66,7 @@ class Health extends Trongate
     $saved_timeout = $this->probe_timeout;
     $this->probe_timeout = 2;
     foreach ($deployments as $d) {
-      $this->_check_deployment((int) $d->id, (int) $customer->id);
+      $this->check_deployment_result((int) $d->id, (int) $customer->id);
     }
     $this->probe_timeout = $saved_timeout;
 
@@ -92,13 +92,13 @@ class Health extends Trongate
     $this->module('deployment');
     $deployments = array_slice($this->deployment->model->all($cid), 0, 10);
     foreach ($deployments as $d) {
-      $this->_check_deployment((int) $d->id, $cid);
+      $this->check_deployment_result((int) $d->id, $cid);
     }
 
     $this->module('environment/services');
     $services = array_slice($this->services->model->all($cid), 0, 10);
     foreach ($services as $s) {
-      $this->_check_service((int) $s->id, $cid);
+      $this->check_service_result((int) $s->id, $cid);
     }
 
     $this->probe_timeout = $saved_timeout;
@@ -108,11 +108,11 @@ class Health extends Trongate
     redirect('server-health/health');
   }
 
-  private function _check_deployment(int $id, int $customer_id): void
+  function check_deployment_result(int $id, int $customer_id): ?array
   {
     $this->module('deployment');
     $d = $this->deployment->model->get($id, $customer_id);
-    if ($d === false) return;
+    if ($d === false) return null;
 
     $result = $this->_probe_http($d->domain ?? '', $d->ip_address ?? '');
     $this->model->record_health([
@@ -132,15 +132,16 @@ class Health extends Trongate
     ]);
 
     $_SESSION['flash_success'] = 'Health check complete: ' . $result['status'] . ' (' . $result['message'] . ')';
+    return $result;
   }
 
-  private function _check_service(int $id, int $customer_id): void
+  function check_service_result(int $id, int $customer_id): ?array
   {
     $this->module('environment-services');
     $s = $this->services->model->get($id, $customer_id);
-    if ($s === false) return;
+    if ($s === false) return null;
 
-    $result = $s->type === 'mysql'
+    $result = in_array($s->type, ['mysql', 'mariadb'], true)
       ? $this->_probe_mysql_via_ssh((int) $s->environment_id, $customer_id)
       : $this->_probe_tcp($s->host ?? '', (int) $s->port);
     $this->model->record_health([
@@ -159,6 +160,7 @@ class Health extends Trongate
     ]);
 
     $_SESSION['flash_success'] = 'Health check complete: ' . $result['status'] . ' (' . $result['message'] . ')';
+    return $result;
   }
 
   private function _probe_mysql_via_ssh(int $env_id, int $customer_id): array

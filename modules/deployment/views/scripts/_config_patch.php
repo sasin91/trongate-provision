@@ -9,7 +9,7 @@
  * Included from `deploy_script.php` — inherits its scope.
  *
  * Required vars from parent scope:
- *   @var string $webroot  Document root on the target server.
+ *   @var string $release_path Staged release path on the target server.
  *   @var string $db       Fallback database name (when DB_NAME is not in $env_vars).
  *   @var array  $env_vars Already-decrypted KEY => value map (may be empty).
  */
@@ -35,15 +35,15 @@ _patch_array_val() {
     sed -i "s|'${key}' => '[^']*'|'${key}' => '${esc}'|" "$file"
     echo "==> Patched ${key} in $(basename "$file")"
 }
-_patch_define "<?= $webroot ?>/config/config.php"      'ENV'               "${PROVISION_ENV:-}"
-_patch_define "<?= $webroot ?>/config/site_owner.php"  'WEBSITE_NAME'      "${PROVISION_WEBSITE_NAME:-}"
-_patch_define "<?= $webroot ?>/config/site_owner.php"  'OUR_NAME'          "${PROVISION_OUR_NAME:-}"
-_patch_define "<?= $webroot ?>/config/site_owner.php"  'OUR_TELNUM'        "${PROVISION_OUR_TELNUM:-}"
-_patch_define "<?= $webroot ?>/config/site_owner.php"  'OUR_ADDRESS'       "${PROVISION_OUR_ADDRESS:-}"
-_patch_define "<?= $webroot ?>/config/site_owner.php"  'OUR_EMAIL_ADDRESS' "${PROVISION_OUR_EMAIL:-}"
+_patch_define "$RELEASE_PATH/config/config.php"      'ENV'               "${PROVISION_ENV:-}"
+_patch_define "$RELEASE_PATH/config/site_owner.php"  'WEBSITE_NAME'      "${PROVISION_WEBSITE_NAME:-}"
+_patch_define "$RELEASE_PATH/config/site_owner.php"  'OUR_NAME'          "${PROVISION_OUR_NAME:-}"
+_patch_define "$RELEASE_PATH/config/site_owner.php"  'OUR_TELNUM'        "${PROVISION_OUR_TELNUM:-}"
+_patch_define "$RELEASE_PATH/config/site_owner.php"  'OUR_ADDRESS'       "${PROVISION_OUR_ADDRESS:-}"
+_patch_define "$RELEASE_PATH/config/site_owner.php"  'OUR_EMAIL_ADDRESS' "${PROVISION_OUR_EMAIL:-}"
 
 <?php if ($db): ?>
-cat <<'EOF' > "<?= $webroot ?>/config/database.php"
+cat <<'EOF' > "$RELEASE_PATH/config/database.php"
 <?= "<" . "?php" ?>
 
 $databases = [

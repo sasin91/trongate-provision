@@ -85,34 +85,16 @@ class Deployment extends Trongate
             }
           }
 
-          $script_id_raw = (int) post("script_id");
-          if ($script_id_raw > 0) {
-            $this->module("script");
-            if (
-              $this->script->model->get($script_id_raw, (int) $customer->id) ===
-              false
-            ) {
-              $script_id_raw = 0;
-            }
-          }
-
-          $is_canary = post("is_canary") ? 1 : 0;
-          $canary_weight = $is_canary
-            ? max(1, min(99, (int) post("canary_weight") ?: 10))
-            : 100;
-
           $id = $this->model->create([
             "server_id" => $server_id,
             "environment_id" => $environment_id,
             "customer_id" => (int) $customer->id,
-            "script_id" => $script_id_raw > 0 ? $script_id_raw : null,
+            "script_id" => null,
             "source_type" => $source_type,
             "repo_url" =>
               $source_type === "git" ? post("repo_url", true) : null,
             "branch" => $source_type === "git" ? post("branch", true) : null,
             "zip_path" => $zip_path,
-            "is_canary" => $is_canary,
-            "canary_weight" => $canary_weight,
             "status" => "script_ready",
           ]);
 
@@ -120,12 +102,11 @@ class Deployment extends Trongate
             "server_id" => $server_id,
             "environment_id" => $environment_id,
             "source_type" => $source_type,
-            "is_canary" => $is_canary,
             "status" => "script_ready",
           ]);
           $_SESSION["flash_success"] =
-            "Deployment created. Run the deployment script on your server.";
-          redirect("deployment/show/" . $id);
+            "Deployment created. Staging will start automatically.";
+          redirect("deployment/create/" . $id);
           return;
         }
       }
@@ -133,14 +114,18 @@ class Deployment extends Trongate
 
     render_create:
 
+    $wizard_id = (int) segment(3);
+    $wizard_deployment = false;
+    if ($wizard_id > 0 && $_SERVER["REQUEST_METHOD"] !== "POST") {
+      $wizard_deployment = $this->model->get($wizard_id, (int) $customer->id);
+      if ($wizard_deployment === false) {
+        redirect("deployment/create");
+        return;
+      }
+    }
+
     $preselected_server = (int) ($_GET["server"] ?? 0);
     $preselected_env = (int) ($_GET["env"] ?? 0);
-
-    $this->module("script");
-    $deploy_scripts = $this->script->model->by_type(
-      (int) $customer->id,
-      "deploy",
-    );
 
     $data = [
       "view_module" => "deployment",
@@ -152,14 +137,12 @@ class Deployment extends Trongate
       "environments" => $this->model->environments_for_customer(
         (int) $customer->id,
       ),
+      "deployment" => $wizard_deployment,
       "preselected_server" => $preselected_server,
       "preselected_env" => $preselected_env,
-      "deploy_scripts" => $deploy_scripts,
-      "additional_includes_top" => ["deployment_module/css/deployment.css"],
     ];
 
-    $this->module("templates");
-    $this->templates->customer($data);
+    $this->view("create", $data);
   }
 
   function show(): void
@@ -179,12 +162,8 @@ class Deployment extends Trongate
       (int) $deployment->env_id,
       (int) $customer->id,
     );
-
-    $this->module("script");
-    $deploy_scripts = $this->script->model->by_type(
-      (int) $customer->id,
-      "deploy",
-    );
+    $this->module("server-health");
+    $latest_health = $this->health->model->latest("deployment", $id);
 
     $this->module("event");
     $recent_events = $this->event->model->recent_for_entity(
@@ -202,7 +181,7 @@ class Deployment extends Trongate
       "deployment" => $deployment,
       "deploy_script" => $display_script,
       "services" => $services,
-      "deploy_scripts" => $deploy_scripts,
+      "latest_health" => $latest_health,
       "recent_events" => $recent_events,
       "additional_includes_top" => ["deployment_module/css/deployment.css"],
     ];
@@ -431,16 +410,32 @@ class Deployment extends Trongate
     if (preg_match_all("/SHA\s*:\s*([0-9a-f]{7,40})\b/i", $log, $m)) {
       $sha = strtolower(end($m[1]));
     }
+    $release_path = null;
+    if (preg_match_all("/RELEASE_PATH\s*:\s*(\S+)/i", $log, $m)) {
+      $release_path = end($m[1]);
+    }
 
-    $status = $exit_code === 0 ? "success" : "failed";
-    $this->model->finish($id, $status, $log, $sha);
+    $status = $exit_code === 0 ? "staged" : "failed";
+    try {
+      $this->model->finish($id, $status, $log, $sha, $release_path);
+    } catch (Throwable $e) {
+      $message = "Deployment finished remotely, but Provision could not save the staged release metadata: " . $e->getMessage();
+      $emit($message);
+      try {
+        $this->model->mark_stale_running_failed($id, (int) $customer->id, $message);
+      } catch (Throwable) {
+      }
+      $this->stream->done(["status" => "failed", "sha" => $sha, "release_path" => $release_path]);
+      return;
+    }
 
-    if ($status === "success") {
+    if ($status === "staged") {
       if (!empty($d->zip_path) && file_exists($d->zip_path)) {
         @unlink($d->zip_path);
       }
       $this->_emit("DeploymentSucceeded", "deployment", $id, [
         "sha" => $sha,
+        "release_path" => $release_path,
         "source" => "stream",
       ]);
     } else {
@@ -450,7 +445,7 @@ class Deployment extends Trongate
       ]);
     }
 
-    $this->stream->done(["status" => $status, "sha" => $sha]);
+    $this->stream->done(["status" => $status, "sha" => $sha, "release_path" => $release_path]);
   }
 
   private function _wait_for_running_deployment(int $id, int $customer_id, callable $emit): void
@@ -471,6 +466,7 @@ class Deployment extends Trongate
       $this->stream->done([
         "status" => $current->status,
         "sha" => $current->deployed_sha ?? null,
+        "release_path" => $current->release_path ?? null,
       ]);
       return;
     }
@@ -556,7 +552,135 @@ class Deployment extends Trongate
     redirect("deployment/show/" . $id);
   }
 
-  function promote_canary(): void
+  function promote_release(): void
+  {
+    $id = (int) segment(3);
+    $customer = $this->_require_customer();
+    $this->validation->set_rules("dummy", "dummy", "max_length[1]");
+    if ($this->validation->run() !== true) {
+      redirect("deployment/show/" . $id);
+      return;
+    }
+    $result = $this->_promote_release_result($id, (int) $customer->id);
+    if (!$result["ok"]) {
+      $_SESSION["flash_error"] = $result["message"];
+      redirect("deployment/show/" . $id);
+      return;
+    }
+
+    $summary = $result["health"];
+    $_SESSION["flash_success"] =
+      "Release promoted. Health checks: {$summary["healthy"]} healthy, {$summary["unhealthy"]} unhealthy, {$summary["unknown"]} unknown.";
+    redirect("deployment/show/" . $id);
+  }
+
+  function scan_release_sql(): void
+  {
+    $id = (int) segment(3);
+    $customer = $this->_require_customer();
+    $d = $this->model->get($id, (int) $customer->id);
+    if ($d === false || $d->status !== "staged" || empty($d->release_path)) {
+      $this->_json_response(["ok" => false, "message" => "Only staged releases can be scanned for SQL files."], 422);
+      return;
+    }
+
+    $script = $this->_render_release_script("scan_release_sql", $d);
+    $result = $this->_run_remote_script($d, $script);
+    if ($result["exit_code"] !== 0) {
+      $this->_json_response([
+        "ok" => false,
+        "message" => "SQL scan failed: " . $this->_tail_text(trim($result["log"]), 800),
+      ], 500);
+      return;
+    }
+
+    $files = [];
+    foreach (preg_split("/\r\n|\n|\r/", trim((string) $result["log"])) ?: [] as $line) {
+      if (!str_starts_with($line, "SQL_FILE\t")) {
+        continue;
+      }
+      $parts = explode("\t", $line, 3);
+      if (count($parts) !== 3) {
+        continue;
+      }
+      $path = base64_decode($parts[1], true);
+      $sql = base64_decode($parts[2], true);
+      if ($path === false || $sql === false) {
+        continue;
+      }
+      $files[] = ["path" => $path, "sql" => $sql];
+    }
+
+    $this->_json_response(["ok" => true, "files" => $files]);
+  }
+
+  function delete_release_sql(): void
+  {
+    $id = (int) segment(3);
+    $customer = $this->_require_customer();
+    $d = $this->model->get($id, (int) $customer->id);
+    if ($d === false || $d->status !== "staged" || empty($d->release_path)) {
+      $this->_json_response(["ok" => false, "message" => "Only staged releases can have SQL files deleted."], 422);
+      return;
+    }
+
+    $payload = $this->_json_request();
+    $paths = is_array($payload["paths"] ?? null) ? $payload["paths"] : [];
+    $clean_paths = [];
+    foreach ($paths as $path) {
+      if (!is_string($path)) {
+        continue;
+      }
+      $path = str_replace("\\", "/", trim($path));
+      if (
+        $path === "" ||
+        str_starts_with($path, "/") ||
+        str_contains($path, "../") ||
+        str_contains($path, "/..") ||
+        $path === ".."
+      ) {
+        continue;
+      }
+      if (strtolower(pathinfo($path, PATHINFO_EXTENSION)) !== "sql") {
+        continue;
+      }
+      $clean_paths[] = $path;
+    }
+
+    if (empty($clean_paths)) {
+      $this->_json_response(["ok" => false, "message" => "No valid SQL files were selected for deletion."], 422);
+      return;
+    }
+
+    $script = $this->_render_release_script("delete_release_sql", (object) [
+      "release_path" => $d->release_path,
+      "sql_paths" => $clean_paths,
+    ]);
+    $result = $this->_run_remote_script($d, $script);
+    if ($result["exit_code"] !== 0) {
+      $this->_json_response([
+        "ok" => false,
+        "message" => "SQL deletion failed: " . $this->_tail_text(trim($result["log"]), 800),
+      ], 500);
+      return;
+    }
+
+    $deleted = 0;
+    if (preg_match("/DELETED_SQL_COUNT\s*:\s*(\d+)/", $result["log"], $matches)) {
+      $deleted = (int) $matches[1];
+    }
+    $this->_json_response(["ok" => true, "deleted" => $deleted]);
+  }
+
+  function promote_release_wizard(): void
+  {
+    $id = (int) segment(3);
+    $customer = $this->_require_customer();
+    $result = $this->_promote_release_result($id, (int) $customer->id);
+    $this->_json_response($result, $result["ok"] ? 200 : 422);
+  }
+
+  function demote_release(): void
   {
     $id = (int) segment(3);
     $customer = $this->_require_customer();
@@ -566,15 +690,29 @@ class Deployment extends Trongate
       return;
     }
     $d = $this->model->get($id, (int) $customer->id);
-    if ($d !== false && (int) $d->is_canary === 1) {
-      $prev_weight = (int) $d->canary_weight;
-      $this->model->promote_canary($id, (int) $customer->id);
-      $this->_emit("CanaryPromoted", "deployment", $id, [
-        "previous_weight" => $prev_weight,
-      ]);
-      $_SESSION["flash_success"] =
-        "Canary promoted — now receiving full traffic.";
+    if ($d === false || $d->status !== "success" || empty($d->previous_release_path)) {
+      $_SESSION["flash_error"] = "Only live deployments with a previous release can be demoted.";
+      redirect("deployment/show/" . $id);
+      return;
     }
+
+    $script = $this->_render_release_script("demote_release", $d);
+    $result = $this->_run_remote_script($d, $script);
+    if ($result["exit_code"] !== 0) {
+      $_SESSION["flash_error"] = "Demotion failed: " . $this->_tail_text(trim($result["log"]), 500);
+      redirect("deployment/show/" . $id);
+      return;
+    }
+
+    $this->model->demote_release($id, (int) $customer->id);
+    $this->_emit("ReleaseDemoted", "deployment", $id, [
+      "release_path" => $d->release_path,
+      "previous_release_path" => $d->previous_release_path,
+    ]);
+
+    $summary = $this->_run_environment_health_checks($id, (int) $d->env_id, (int) $customer->id);
+    $_SESSION["flash_success"] =
+      "Release demoted. Health checks: {$summary["healthy"]} healthy, {$summary["unhealthy"]} unhealthy, {$summary["unknown"]} unknown.";
     redirect("deployment/show/" . $id);
   }
 
@@ -600,6 +738,55 @@ class Deployment extends Trongate
     redirect("deployment");
   }
 
+  private function _promote_release_result(int $id, int $customer_id): array
+  {
+    $d = $this->model->get($id, $customer_id);
+    if ($d === false || $d->status !== "staged" || empty($d->release_path)) {
+      if ($d !== false && $d->status === "staged") {
+        $recovered_path = $this->_release_path_from_log((string) ($d->run_log ?? ""));
+        if ($recovered_path !== null) {
+          $this->model->set_release_path($id, $recovered_path);
+          $d->release_path = $recovered_path;
+        }
+      }
+      if ($d === false || $d->status !== "staged" || empty($d->release_path)) {
+        return [
+          "ok" => false,
+          "message" => "Only staged releases with a saved release path can be promoted.",
+        ];
+      }
+    }
+
+    $script = $this->_render_release_script("promote_release", $d);
+    $result = $this->_run_remote_script($d, $script);
+    if ($result["exit_code"] !== 0) {
+      return [
+        "ok" => false,
+        "message" => "Promotion failed: " . $this->_tail_text(trim($result["log"]), 800),
+      ];
+    }
+
+    $previous_release_path = null;
+    if (preg_match("/PREVIOUS_RELEASE_PATH\s*:\s*(.*)$/mi", $result["log"], $m)) {
+      $previous_release_path = trim($m[1]) ?: null;
+    }
+    $this->model->promote_release($id, $customer_id, $previous_release_path);
+    $this->_emit("ReleasePromoted", "deployment", $id, [
+      "release_path" => $d->release_path,
+      "previous_release_path" => $previous_release_path,
+    ]);
+
+    $health = $this->_run_environment_health_checks($id, (int) $d->env_id, $customer_id);
+
+    return [
+      "ok" => true,
+      "message" => "Release promoted.",
+      "release_path" => $d->release_path,
+      "previous_release_path" => $previous_release_path,
+      "health" => $health,
+    ];
+  }
+
   /**
    * Decrypts the deployment's env-vars and renders the bash deployment
    * script via the `scripts/deploy_script` view (returned as a string).
@@ -622,6 +809,95 @@ class Deployment extends Trongate
       ],
       true,
     );
+  }
+
+  private function _render_release_script(string $script, object $d): string
+  {
+    return (string) $this->view(
+      "scripts/" . $script,
+      [
+        "view_module" => "deployment",
+        "deployment" => $d,
+      ],
+      true,
+    );
+  }
+
+  private function _run_remote_script(object $d, string $script): array
+  {
+    if (!defined("RUNNER_SSH_KEY") || !RUNNER_SSH_KEY) {
+      return ["exit_code" => 1, "log" => "RUNNER_SSH_KEY is not configured."];
+    }
+
+    $user = $d->ssh_user ?: "root";
+    $port = (int) ($d->ssh_port ?: 22);
+    if (!filter_var($d->ip_address, FILTER_VALIDATE_IP)) {
+      return ["exit_code" => 1, "log" => "Invalid server IP address."];
+    }
+    if (!preg_match('/^[a-z_][a-z0-9_.-]{0,31}$/i', $user)) {
+      return ["exit_code" => 1, "log" => "Invalid SSH user."];
+    }
+
+    $timeout = RUNNER_SCRIPT_TIMEOUT;
+    $cmd =
+      "ssh" .
+      " -i " .
+      escapeshellarg(RUNNER_SSH_KEY) .
+      " -o StrictHostKeyChecking=accept-new" .
+      " -o UserKnownHostsFile=/dev/null" .
+      " -o LogLevel=ERROR" .
+      " -o BatchMode=yes" .
+      " -o ConnectTimeout=15" .
+      " -p " .
+      $port .
+      " " .
+      escapeshellarg("{$user}@{$d->ip_address}") .
+      " \"timeout {$timeout} bash -s\"";
+
+    $proc = proc_open(
+      $cmd,
+      [0 => ["pipe", "r"], 1 => ["pipe", "w"], 2 => ["pipe", "w"]],
+      $pipes,
+    );
+    if (!is_resource($proc)) {
+      return ["exit_code" => 1, "log" => "Failed to open SSH connection."];
+    }
+
+    fwrite($pipes[0], str_replace(["\r\n", "\r"], "\n", $script));
+    fclose($pipes[0]);
+    $stdout = stream_get_contents($pipes[1]);
+    $stderr = stream_get_contents($pipes[2]);
+    fclose($pipes[1]);
+    fclose($pipes[2]);
+    $exit_code = proc_close($proc);
+
+    return [
+      "exit_code" => $exit_code,
+      "log" => trim((string) $stdout . "\n" . (string) $stderr),
+    ];
+  }
+
+  private function _run_environment_health_checks(int $deployment_id, int $env_id, int $customer_id): array
+  {
+    $summary = ["healthy" => 0, "unhealthy" => 0, "unknown" => 0];
+    $record = static function (?array $result) use (&$summary): void {
+      $status = $result["status"] ?? "unknown";
+      if (!isset($summary[$status])) {
+        $status = "unknown";
+      }
+      $summary[$status]++;
+    };
+
+    $this->module("server-health");
+    $record($this->health->check_deployment_result($deployment_id, $customer_id));
+
+    $this->module("environment-services");
+    $services = $this->services->model->by_environment($env_id, $customer_id);
+    foreach ($services as $service) {
+      $record($this->health->check_service_result((int) $service->id, $customer_id));
+    }
+
+    return $summary;
   }
 
   /**
@@ -671,6 +947,29 @@ class Deployment extends Trongate
   private function _tail_text(string $message, int $length): string
   {
     return strlen($message) > $length ? "..." . substr($message, -$length) : $message;
+  }
+
+  private function _json_request(): array
+  {
+    $raw = file_get_contents("php://input");
+    $decoded = json_decode((string) $raw, true);
+    return is_array($decoded) ? $decoded : [];
+  }
+
+  private function _json_response(array $payload, int $status = 200): void
+  {
+    http_response_code($status);
+    header("Content-Type: application/json");
+    echo json_encode($payload);
+  }
+
+  private function _release_path_from_log(string $log): ?string
+  {
+    if (preg_match_all("/RELEASE_PATH\s*:\s*(\S+)/i", $log, $matches)) {
+      $path = trim((string) end($matches[1]));
+      return $path !== "" ? $path : null;
+    }
+    return null;
   }
 
   private function _env_server_allowed(

@@ -13,12 +13,5 @@
 REPO_URL="<?= $repo ?>"
 BRANCH="<?= $branch ?>"
 
-echo "==> Cloning/updating repository..."
-if [ -d "$WEB_ROOT/.git" ]; then
-    git -C "$WEB_ROOT" fetch origin
-    git -C "$WEB_ROOT" checkout $BRANCH
-    git -C "$WEB_ROOT" pull origin $BRANCH
-else
-    mkdir -p "$WEB_ROOT"
-    git clone --branch $BRANCH "$REPO_URL" "$WEB_ROOT"
-fi
+echo "==> Cloning repository into $RELEASE_PATH..."
+git clone --branch "$BRANCH" "$REPO_URL" "$RELEASE_PATH"

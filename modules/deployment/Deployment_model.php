@@ -60,18 +60,21 @@ class Deployment_model extends Model {
         );
     }
 
-    function finish(int $id, string $status, string $log, ?string $sha): void {
+    function finish(int $id, string $status, string $log, ?string $sha, ?string $release_path = null): void {
+        $params = ['status' => $status, 'log' => $log, 'id' => $id];
+        $sets = "status=:status, run_log=:log, finished_at=NOW()";
         if ($sha !== null) {
-            $this->db->query_bind(
-                "UPDATE deployment SET status=:status, run_log=:log, finished_at=NOW(), deployed_sha=:sha WHERE id=:id",
-                ['status' => $status, 'log' => $log, 'sha' => $sha, 'id' => $id]
-            );
-        } else {
-            $this->db->query_bind(
-                "UPDATE deployment SET status=:status, run_log=:log, finished_at=NOW() WHERE id=:id",
-                ['status' => $status, 'log' => $log, 'id' => $id]
-            );
+            $sets .= ", deployed_sha=:sha";
+            $params['sha'] = $sha;
         }
+        if ($release_path !== null) {
+            $sets .= ", release_path=:release_path";
+            $params['release_path'] = $release_path;
+        }
+        $this->db->query_bind(
+            "UPDATE deployment SET {$sets} WHERE id=:id",
+            $params
+        );
     }
 
     function mark_stale_running_failed(int $id, int $customer_id, string $message): void {
@@ -87,15 +90,33 @@ class Deployment_model extends Model {
         $this->db->update($id, ['script_id' => $script_id], 'deployment');
     }
 
-    function promote_canary(int $id, int $customer_id): void {
+    function promote_release(int $id, int $customer_id, ?string $previous_release_path): void {
         $this->db->query_bind(
-            "UPDATE deployment SET is_canary = 0, canary_weight = 100, status = 'success' WHERE id = :id AND customer_id = :cid",
+            "UPDATE deployment
+             SET status = 'success',
+                 previous_release_path = :previous_release_path,
+                 promoted_at = NOW()
+             WHERE id = :id AND customer_id = :cid",
+            ['id' => $id, 'cid' => $customer_id, 'previous_release_path' => $previous_release_path]
+        );
+    }
+
+    function demote_release(int $id, int $customer_id): void {
+        $this->db->query_bind(
+            "UPDATE deployment
+             SET status = 'staged',
+                 demoted_at = NOW()
+             WHERE id = :id AND customer_id = :cid",
             ['id' => $id, 'cid' => $customer_id]
         );
     }
 
     function set_deployed_sha(int $id, string $sha): void {
         $this->db->update($id, ['deployed_sha' => $sha], 'deployment');
+    }
+
+    function set_release_path(int $id, string $release_path): void {
+        $this->db->update($id, ['release_path' => $release_path], 'deployment');
     }
 
     function create(array $data): int|false {

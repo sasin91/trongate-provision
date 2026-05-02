@@ -23,47 +23,12 @@ $date = date("Y-m-d H:i:s");
 $server = $d->server_name . " (" . $d->ip_address . ")";
 $env_vars = $env_vars ?? [];
 
-// Use custom script if assigned
-if (!empty($d->script_id) && !empty($d->script_body)) {
-
-  // Capture the env-vars partial as a string so it can be substituted into
-  // the user's template via strtr(). A nested ob_start/ob_get_clean is fine
-  // here — it's independent of any buffer Trongate::view() may have opened.
-  ob_start();
-  include __DIR__ . "/_env_vars.php";
-  $env_vars_block = ob_get_clean();
-
-  $tokens = [
-    "{{PHP_VERSION}}" => $d->php_version ?? "",
-    "{{REPO_URL}}" => $repo,
-    "{{BRANCH}}" => $branch,
-    "{{WEB_ROOT}}" => $webroot,
-    "{{DOMAIN}}" => $domain,
-    "{{DB_NAME}}" => $db,
-    "{{SERVER_IP}}" => $d->ip_address ?? "",
-    "{{SERVER_NAME}}" => $d->server_name ?? "",
-    "{{ENV_NAME}}" => $d->env_name ?? "",
-    "{{ENV_VARS}}" => $env_vars_block,
-  ];
-  ?>
-#!/bin/bash
-# ────────────────────────────────────────────────────────────────
-# Custom script: <?= $d->script_name ?>
-
-# Deployment #<?= $d->id ?> — <?= $server ?>
-
-# Generated: <?= $date ?>
-
-# ────────────────────────────────────────────────────────────────
-
-<?= strtr($d->script_body, $tokens) ?>
-<?php return;
-}
 $source_note =
   $source === "zip"
     ? "# App source: zip (transferred via SCP)"
     : "# Repository: {$repo} [{$branch}]";
-$is_canary = (int) ($d->is_canary ?? 0) === 1;
+$release_suffix = date('YmdHis');
+$release_path = "/var/www/releases/deployment_" . (int) $d->id . "_" . $release_suffix;
 ?>
 #!/bin/bash
 # ────────────────────────────────────────────────────────────────
@@ -72,7 +37,8 @@ $is_canary = (int) ($d->is_canary ?? 0) === 1;
 
 <?= $source_note ?>
 
-# Web root  : <?= $webroot ?>
+# Release   : <?= $release_path ?>
+# Web root  : <?= $webroot ?> (updated on Promote)
 
 # Generated : <?= $date ?>
 
@@ -83,30 +49,46 @@ $is_canary = (int) ($d->is_canary ?? 0) === 1;
 set -euo pipefail
 umask 022
 
-<?php if ($is_canary): ?>
-# ── Canary: routing <?= (int) $d->canary_weight ?>% of traffic to this server ────────
-<?php endif; ?>
+run_sudo() {
+    if [ "$(id -u)" -eq 0 ]; then
+        "$@"
+        return
+    fi
+    sudo -n "$@"
+}
+
+if [ "$(id -u)" -ne 0 ]; then
+    if ! command -v sudo >/dev/null 2>&1; then
+        echo "ERROR: sudo is required when deploying as $(whoami)." >&2
+        exit 1
+    fi
+    if ! sudo -n -l >/dev/null 2>&1; then
+        echo "ERROR: passwordless sudo is required for $(whoami). Re-run provisioning as root or add the Provision sudoers rules." >&2
+        exit 1
+    fi
+fi
 
 # ── Environment Variables ─────────────────────────────────────────
 <?php include __DIR__ . "/_env_vars.php"; ?>
 
 
 WEB_ROOT="<?= $webroot ?>"
+RELEASE_PATH="<?= $release_path ?>"
 DB_NAME="<?= $db ?>"
+
+if [ -e "$RELEASE_PATH" ]; then
+    echo "ERROR: release path already exists: $RELEASE_PATH" >&2
+    exit 1
+fi
+RELEASE_PARENT=$(dirname "$RELEASE_PATH")
+run_sudo mkdir -p "$RELEASE_PARENT"
+run_sudo install -d -m 0755 -o "$(id -un)" -g "$(id -gn)" "$RELEASE_PATH"
 
 <?php if ($source === "zip") {
   include __DIR__ . "/_zip_fetch.php";
 } else {
   include __DIR__ . "/_git_clone.php";
 } ?>
-
-
-<?php if ($db): ?>
-mysql -e "CREATE DATABASE IF NOT EXISTS \`<?= $db ?>\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
-echo "==> Database '<?= $db ?>' ready."
-<?php else: ?>
-# (no database configured)
-<?php endif; ?>
 
 
 <?php if ($domain):
@@ -119,8 +101,8 @@ endif; ?>
 
 
 <?php if ($domain): ?>
-if [ -f "<?= $webroot ?>/config/config.php" ]; then
-    sed -i "s|define('BASE_URL', '[^']*');|define('BASE_URL', 'https://<?= $domain ?>/');|" "<?= $webroot ?>/config/config.php"
+if [ -f "$RELEASE_PATH/config/config.php" ]; then
+    sed -i "s|define('BASE_URL', '[^']*');|define('BASE_URL', 'https://<?= $domain ?>/');|" "$RELEASE_PATH/config/config.php"
     echo "==> BASE_URL patched to https://<?= $domain ?>/"
 fi
 <?php else: ?>
@@ -130,13 +112,15 @@ fi
 
 <?php include __DIR__ . "/_config_patch.php"; ?>
 
+echo "==> Setting deployed file group to www-data..."
+run_sudo chgrp -R www-data "$RELEASE_PATH"
 
-echo "==> Restarting Apache..."
-sudo systemctl restart apache2
-
-DEPLOYED_SHA=$(git -C "$WEB_ROOT" rev-parse HEAD 2>/dev/null || echo "n/a")
+DEPLOYED_SHA=$(git -C "$RELEASE_PATH" rev-parse HEAD 2>/dev/null || echo "n/a")
 echo ""
-echo "Deployment complete!"
-echo "  Web root: $WEB_ROOT"
-echo "  SHA     : $DEPLOYED_SHA"
-echo "  → Record this SHA in Provision when marking the deployment successful."
+echo "Release staged!"
+echo "  Release path: $RELEASE_PATH"
+echo "  Web root    : $WEB_ROOT"
+echo "  SHA         : $DEPLOYED_SHA"
+echo "RELEASE_PATH: $RELEASE_PATH"
+echo "SHA: $DEPLOYED_SHA"
+echo "Update the database manually, then promote this release in Provision."

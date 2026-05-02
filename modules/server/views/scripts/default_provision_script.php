@@ -30,6 +30,10 @@ $PROVISION_USER ALL=(ALL) NOPASSWD: /usr/bin/tail -n 80 /var/log/letsencrypt/let
 $PROVISION_USER ALL=(ALL) NOPASSWD: /usr/bin/certbot *
 $PROVISION_USER ALL=(ALL) NOPASSWD: /usr/bin/systemctl reload apache2
 $PROVISION_USER ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart apache2
+$PROVISION_USER ALL=(ALL) NOPASSWD: /usr/bin/mkdir -p /var/www, /usr/bin/mkdir -p /var/www/*
+$PROVISION_USER ALL=(ALL) NOPASSWD: /usr/bin/install -d -m 0755 -o $PROVISION_USER -g $PROVISION_USER /var/www/releases/*
+$PROVISION_USER ALL=(ALL) NOPASSWD: /usr/bin/mv -Tf /tmp/provision_promote_* /var/www/*, /usr/bin/mv -Tf /tmp/provision_demote_* /var/www/*
+$PROVISION_USER ALL=(ALL) NOPASSWD: /usr/bin/chgrp -R www-data /var/www, /usr/bin/chgrp -R www-data /var/www/*
 $PROVISION_USER ALL=(ALL) NOPASSWD: /usr/bin/tee /etc/apache2/sites-available/*.conf
 $PROVISION_USER ALL=(ALL) NOPASSWD: /usr/bin/a2ensite *
 $PROVISION_USER ALL=(ALL) NOPASSWD: /usr/bin/a2dissite 000-default
@@ -45,11 +49,14 @@ chown "$PROVISION_USER":www-data /var/www
 chmod 2775 /var/www
 mkdir -p "$RELEASES_DIR"
 chmod 2775 "$RELEASES_DIR"
-# Replace Apache's default html dir so provision user controls the web root
-rm -rf /var/www/html
-mkdir -p /var/www/html
-chown "$PROVISION_USER":www-data /var/www/html
-chmod 2775 /var/www/html
+EMPTY_RELEASE="$RELEASES_DIR/.provision_empty"
+mkdir -p "$EMPTY_RELEASE"
+chown "$PROVISION_USER":www-data "$EMPTY_RELEASE"
+chmod 2775 "$EMPTY_RELEASE"
+mkdir -p "$(dirname "$LIVE_LINK")"
+rm -rf "$LIVE_LINK"
+ln -s "$EMPTY_RELEASE" "$LIVE_LINK"
+chown -h "$PROVISION_USER":www-data "$LIVE_LINK"
 systemctl enable --now apache2 mariadb
 
 # ── MariaDB ───────────────────────────────────────────────────────

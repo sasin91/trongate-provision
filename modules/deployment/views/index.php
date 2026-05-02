@@ -1,7 +1,7 @@
 <div class="page-header">
     <div class="page-header-left">
         <div class="page-title">Deployments</div>
-        <div style="font-size:.85rem;color:#64748b;margin-top:.25rem">Each deployment runs an environment's script on a server</div>
+        <div style="font-size:.85rem;color:#64748b;margin-top:.25rem">Deploy code as a staged release, then promote it when the database is ready</div>
     </div>
     <a href="deployment/create" class="btn btn-primary">+ New Deployment</a>
 </div>
@@ -11,7 +11,7 @@
         <div class="empty-state">
             <div class="empty-icon">&#10148;</div>
             <div class="empty-title">No deployments yet</div>
-            <div class="empty-desc">Create a deployment to get a script that clones and configures your app on a server.</div>
+            <div class="empty-desc">Create a deployment to stage a release under /var/www/releases before switching live traffic.</div>
         </div>
     </div>
 <?php else: ?>

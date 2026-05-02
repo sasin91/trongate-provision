@@ -18,7 +18,7 @@
  */
 ?>
 echo "==> Configuring virtual host for <?= $domain ?>..."
-sudo tee /etc/apache2/sites-available/<?= $domain ?>.conf << 'VHOSTEOF'
+run_sudo tee /etc/apache2/sites-available/<?= $domain ?>.conf << 'VHOSTEOF'
 <VirtualHost *:80>
     ServerName <?= $domain ?>
 
@@ -35,6 +35,6 @@ sudo tee /etc/apache2/sites-available/<?= $domain ?>.conf << 'VHOSTEOF'
     CustomLog ${APACHE_LOG_DIR}/<?= $domain ?>-access.log combined
 </VirtualHost>
 VHOSTEOF
-sudo a2ensite <?= $domain ?>
+run_sudo a2ensite <?= $domain ?>
 
-sudo a2dissite 000-default 2>/dev/null || true
+run_sudo a2dissite 000-default 2>/dev/null || true

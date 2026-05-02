@@ -4,7 +4,7 @@
  *
  * Emits the bash block that retrieves the application zip (either from a
  * pre-uploaded local file via $DEPLOY_ZIP or a public URL) and extracts it
- * into $WEB_ROOT, flattening a single top-level directory if needed.
+ * into $RELEASE_PATH, flattening a single top-level directory if needed.
  *
  * Included from `deploy_script.php` — inherits its scope.
  *
@@ -55,8 +55,7 @@ else
     APP_DIR="$EXTRACT_DIR"
 fi
 
-echo "==> Publishing files to $WEB_ROOT..."
-mkdir -p "$WEB_ROOT"
-find "$WEB_ROOT" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
-cp -a "$APP_DIR"/. "$WEB_ROOT"/
-echo "==> Zip extracted to $WEB_ROOT."
+echo "==> Publishing files to $RELEASE_PATH..."
+mkdir -p "$RELEASE_PATH"
+cp -a "$APP_DIR"/. "$RELEASE_PATH"/
+echo "==> Zip extracted to $RELEASE_PATH."

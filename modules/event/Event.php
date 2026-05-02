@@ -53,7 +53,8 @@ class Event extends Trongate {
             'DeploymentFailed'           => 'Deployment Failed',
             'DeploymentDeleted'          => 'Deployment Deleted',
             'DeploymentScriptChanged'    => 'Script Changed',
-            'CanaryPromoted'             => 'Canary Promoted',
+            'ReleasePromoted'            => 'Release Promoted',
+            'ReleaseDemoted'             => 'Release Demoted',
             'ServerCreated'              => 'Server Added',
             'ServerStatusChanged'        => 'Server Status Changed',
             'ServerDeleted'              => 'Server Deleted',
@@ -100,12 +101,13 @@ class Event extends Trongate {
     static function payload_summary(string $event_type, array $payload): string {
         return match ($event_type) {
             'DeploymentCreated'          => htmlspecialchars($payload['repo_url'] ?? '') . ' @ ' . htmlspecialchars($payload['branch'] ?? ''),
-            'DeploymentSucceeded'        => ($payload['deployed_sha'] ?? null) ? 'SHA: ' . htmlspecialchars(substr($payload['deployed_sha'], 0, 8)) : '',
+            'DeploymentSucceeded'        => ($payload['deployed_sha'] ?? $payload['sha'] ?? null) ? 'SHA: ' . htmlspecialchars(substr($payload['deployed_sha'] ?? $payload['sha'], 0, 8)) : '',
             'ServerStatusChanged'        => htmlspecialchars($payload['from'] ?? '') . ' → ' . htmlspecialchars($payload['to'] ?? ''),
             'HealthCheckCompleted'       => htmlspecialchars($payload['status'] ?? '') . ($payload['response_time_ms'] ?? null ? ', ' . $payload['response_time_ms'] . 'ms' : '') . ($payload['http_code'] ?? null ? ' (' . $payload['http_code'] . ')' : ''),
             'ServiceAdded'               => htmlspecialchars($payload['name'] ?? '') . ' (' . htmlspecialchars($payload['type'] ?? '') . ')',
             'EnvironmentVariablesUpdated'=> ($payload['var_count'] ?? 0) . ' variable(s)',
-            'CanaryPromoted'             => 'was ' . ($payload['previous_weight'] ?? '?') . '%',
+            'ReleasePromoted'            => htmlspecialchars($payload['release_path'] ?? ''),
+            'ReleaseDemoted'             => htmlspecialchars($payload['previous_release_path'] ?? ''),
             'DeploymentScriptChanged'    => ($payload['script_id'] ?? null) ? 'custom script #' . $payload['script_id'] : 'reverted to default',
             'CustomerLoginFailed'        => htmlspecialchars($payload['email'] ?? ''),
             default                      => implode(', ', array_filter(array_map(

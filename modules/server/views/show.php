@@ -179,7 +179,7 @@
     <div class="empty-state">
       <div class="empty-icon">&#10148;</div>
       <div class="empty-title">No deployments yet</div>
-      <div class="empty-desc">Create a deployment to deploy your application to this server.</div>
+      <div class="empty-desc">Create a deployment to stage a release on this server.</div>
     </div>
   <?php else: ?>
     <div class="table-wrap">

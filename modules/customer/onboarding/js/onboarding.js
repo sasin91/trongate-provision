@@ -141,8 +141,8 @@
         initEventStream(root.dataset.streamUrl, {
             onDone: function (result) {
                 if (msg) {
-                    msg.textContent = result.status === 'success'
-                        ? '✓ Deployment complete!'
+                    msg.textContent = result.status === 'staged'
+                        ? 'Release staged. Open the deployment page to update the database and promote it.'
                         : '✗ Deployment failed — you can retry from the deployment page.';
                 }
                 showStreamPanel(panel);
