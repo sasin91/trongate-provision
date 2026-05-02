@@ -47,6 +47,11 @@
                            placeholder="example.com">
                 </div>
 
+                <?php
+                $control_class = 'form-control';
+                include __DIR__ . '/_setup_fields.php';
+                ?>
+
                 <div class="form-actions">
                     <button type="submit" class="btn btn-primary">Create Environment</button>
                     <a href="environment" class="btn btn-secondary">Cancel</a>

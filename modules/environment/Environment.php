@@ -32,17 +32,26 @@ class Environment extends Trongate {
 
             if ($this->validation->run() === true) {
                 $name = post('name', true);
+                $cfg_patches = $this->_config_patch_variables_from_post();
                 $env_id = $this->model->create_with_defaults(
                     (int) $customer->id,
                     $name,
                     post('php_version', true),
                     post('domain', true) ?: null,
+                    $cfg_patches,
                 );
                 if ($env_id === false) {
                     $_SESSION['flash_error'] = 'Environment could not be created.';
                     redirect('environment/create');
                     return;
                 }
+                $this->module('environment-services');
+                $this->services->model->create_defaults_for_environment(
+                    (int) $env_id,
+                    (int) $customer->id,
+                    (array) ($_POST['services'] ?? []),
+                    post('domain', true) ?: null,
+                );
                 $this->_emit('EnvironmentCreated', 'environment', (int) $env_id, [
                     'name'        => $name,
                     'php_version' => post('php_version', true),
@@ -161,6 +170,17 @@ class Environment extends Trongate {
         ]);
         $_SESSION['flash_success'] = 'Environment deleted.';
         redirect('environment');
+    }
+
+    private function _config_patch_variables_from_post(): array {
+        return array_filter([
+            'PROVISION_ENV'          => post('cfg_env', true),
+            'PROVISION_WEBSITE_NAME' => post('cfg_website_name', true),
+            'PROVISION_OUR_NAME'     => post('cfg_our_name', true),
+            'PROVISION_OUR_TELNUM'   => post('cfg_our_telnum', true),
+            'PROVISION_OUR_ADDRESS'  => post('cfg_our_address', true),
+            'PROVISION_OUR_EMAIL'    => post('cfg_our_email', true),
+        ], fn($v) => $v !== '' && $v !== null);
     }
 
     private function _require_customer(): object {
