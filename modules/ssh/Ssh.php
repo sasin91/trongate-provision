@@ -25,6 +25,7 @@ class Ssh extends Trongate {
         ], $pipes);
 
         if (!is_resource($proc)) {
+            ($on_line)("Failed to open SSH connection.");
             return 1;
         }
 
