@@ -1,11 +1,4 @@
 <?php
-$wizard_title      = 'Create Deployment — Provision Setup';
-$wizard_css        = 'customer-onboarding_module/css/onboarding.css';
-$wizard_heading    = '&#9654; Create Deployment';
-$wizard_subheading = 'Confirm your provisioned server and app source. Provision will run the deployment script next.';
-$wizard_card_class = 'onboarding-card--standard';
-include APPPATH . 'modules/wizard/views/open.php';
-
 $_src_partial = __DIR__ . '/_source_fields.php';
 ?>
 
@@ -42,11 +35,3 @@ $_src_partial = __DIR__ . '/_source_fields.php';
         Create Deployment &amp; Deploy &#10148;
     </button>
     <?= form_close() ?>
-
-<?php
-$wizard_step_num   = 7;
-$wizard_step_total = 8;
-$wizard_back_url   = 'customer-onboarding/dns_ssl';
-$wizard_back_text  = '← Back';
-$wizard_js         = 'customer-onboarding_module/js/onboarding.js';
-include APPPATH . 'modules/wizard/views/close.php';

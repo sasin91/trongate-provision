@@ -39,6 +39,17 @@ class Templates extends Trongate {
     }
 
     /**
+     * Display wizard layout template with provided data.
+     * Renders a standalone full-page wizard shell around an inner partial view.
+     *
+     * @param array $data The data to pass to the template view
+     * @return void
+     */
+    public function wizard(array $data): void {
+        $this->display('wizard', $data);
+    }
+
+    /**
      * Display public theme template with provided data.
      * Loads the public template with optional theme variation support.
      *

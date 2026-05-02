@@ -1,11 +1,4 @@
 <?php
-$wizard_title      = 'Configure Hetzner Server — Provision Setup';
-$wizard_css        = 'customer-onboarding_module/css/onboarding.css';
-$wizard_heading    = '&#9729; Configure Hetzner Server';
-$wizard_subheading = 'Select or create the server that Provision will prepare for this environment.';
-$wizard_card_class = 'onboarding-card--wide';
-include APPPATH . 'modules/wizard/views/open.php';
-
 $active_tab = (post('provider', true) === 'hetzner_import') ? 'import' : 'new';
 ?>
 
@@ -123,13 +116,4 @@ $active_tab = (post('provider', true) === 'hetzner_import') ? 'import' : 'new';
     </div>
     <?php endif; ?>
 
-<?php
-$wizard_step_num   = 4;
-$wizard_step_total = 8;
-$wizard_back_url   = 'customer-onboarding/server_hetzner';
-$wizard_back_text  = '← Back';
-$wizard_js         = 'customer-onboarding_module/js/onboarding.js';
-?>
 <script src="js/trongate-mx.js"></script>
-<?php
-include APPPATH . 'modules/wizard/views/close.php';

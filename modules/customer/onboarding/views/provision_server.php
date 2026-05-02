@@ -1,14 +1,6 @@
 <?php
 $_server_ipv6 = trim((string) ($server->ipv6_address ?? ''));
 $_ipv6_part   = $_server_ipv6 !== '' ? ', ' . $_server_ipv6 : '';
-
-$wizard_title      = 'Provisioning Server — Provision Setup';
-$wizard_css        = 'customer-onboarding_module/css/onboarding.css';
-$wizard_heading    = '&#9881; Provisioning Server';
-$wizard_subheading = 'Installing the LAMP stack on ' . $server->name
-    . ' (' . $server->ip_address . $_ipv6_part . '). This takes a few minutes.';
-$wizard_card_class = '';
-include APPPATH . 'modules/wizard/views/open.php';
 ?>
 <style>
     #log-pre {
@@ -43,12 +35,6 @@ include APPPATH . 'modules/wizard/views/open.php';
             Configure DNS &amp; SSL &#10148;
         </a>
     </div>
-
-    <p class="onboarding-footer-note">
-        Step 5 of 8 &mdash;
-        <a href="customer">Skip to Dashboard</a>
-    </p>
-</div>
 
 <script>
 (function () {
@@ -117,6 +103,3 @@ include APPPATH . 'modules/wizard/views/open.php';
     <?php endif; ?>
 })();
 </script>
-
-</body>
-</html>

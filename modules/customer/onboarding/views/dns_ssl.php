@@ -48,13 +48,6 @@ $copyable_value = static function (string $value): void {
     </span>
     <?php
 };
-
-$wizard_title      = 'DNS &amp; SSL — Provision Setup';
-$wizard_css        = 'customer-onboarding_module/css/onboarding.css';
-$wizard_heading    = '&#128274; DNS &amp; SSL';
-$wizard_subheading = 'Point your domain at the provisioned server, then optionally run Let\'s Encrypt before registering the deployment.';
-$wizard_card_class = 'onboarding-card--large';
-include APPPATH . 'modules/wizard/views/open.php';
 ?>
 <style>
     #ssl-log-panel {
@@ -191,13 +184,6 @@ include APPPATH . 'modules/wizard/views/open.php';
     </button>
     <?= form_close() ?>
 
-    <p class="onboarding-footer-note">
-        Step 6 of 8 &mdash;
-        <a href="customer-onboarding/provision_server">&#8592; Back</a>
-    </p>
-</div>
-
-<script src="customer-onboarding_module/js/onboarding.js"></script>
 <script>
 (function () {
     function fallbackCopy(value) {
@@ -320,5 +306,3 @@ include APPPATH . 'modules/wizard/views/open.php';
     }
 })();
 </script>
-</body>
-</html>

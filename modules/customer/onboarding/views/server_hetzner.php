@@ -1,19 +1,3 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <base href="<?= BASE_URL ?>">
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Connect Hetzner — Provision Setup</title>
-    <link rel="stylesheet" href="customer-onboarding_module/css/onboarding.css">
-</head>
-<body>
-
-<div class="onboarding-card onboarding-card--standard">
-    <div class="onboarding-header">
-        <h1>&#9729; Connect Hetzner Cloud</h1>
-        <p>Enter your API token. Provision will validate it and upload your SSH key so servers are accessible the moment they boot.</p>
-    </div>
 
     <?= validation_errors('<div class="error-message">', '</div>') ?>
 
@@ -60,30 +44,10 @@
             required autofocus>
     </div>
 
-    <div class="steps">
-        <div class="step-dot completed"></div>
-        <div class="step-dot completed"></div>
-        <div class="step-dot completed"></div>
-        <div class="step-dot completed"></div>
-        <div class="step-dot active"></div>
-        <div class="step-dot"></div>
-        <div class="step-dot"></div>
-        <div class="step-dot"></div>
-        <div class="step-dot"></div>
-    </div>
+    <?= wizard_step_dots(wizard_step_classes(8, 4)) ?>
 
     <button type="submit" class="btn-primary">
         <div class="spinner"></div>
         Connect Hetzner &amp; Continue &#10148;
     </button>
     <?= form_close() ?>
-
-    <p class="onboarding-footer-note">
-        Step 4 of 8 &mdash;
-        <a href="customer-onboarding/choose_provider">&#8592; Back</a>
-    </p>
-</div>
-
-<script src="customer-onboarding_module/js/onboarding.js"></script>
-</body>
-</html>

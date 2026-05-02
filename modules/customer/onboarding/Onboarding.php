@@ -71,14 +71,14 @@ class Onboarding extends Trongate
     $customer = $this->_require_not_onboarded();
 
     if (!$this->_is_post()) {
-      $this->view('ssh_key');
+      $this->_render_wizard_view('ssh_key', [], 1, 'customer/logout', 'Sign out');
       return;
     }
 
     $this->validation->set_rules('public_key', 'SSH Public Key', 'required|callback_validate_ssh_key');
 
     if ($this->validation->run() !== true) {
-      $this->view('ssh_key');
+      $this->_render_wizard_view('ssh_key', [], 1, 'customer/logout', 'Sign out');
       return;
     }
 
@@ -97,7 +97,7 @@ class Onboarding extends Trongate
     }
 
     if (!$this->_is_post()) {
-      $this->view('environment', ['php_versions' => $this->php_versions]);
+      $this->_render_wizard_view('environment', ['php_versions' => $this->php_versions], 2, 'customer-onboarding/ssh_key', '← Back');
       return;
     }
 
@@ -105,7 +105,7 @@ class Onboarding extends Trongate
     $this->validation->set_rules('php_version', 'PHP version',      'required');
 
     if ($this->validation->run() !== true) {
-      $this->view('environment', ['php_versions' => $this->php_versions]);
+      $this->_render_wizard_view('environment', ['php_versions' => $this->php_versions], 2, 'customer-onboarding/ssh_key', '← Back');
       return;
     }
 
@@ -176,7 +176,7 @@ class Onboarding extends Trongate
     }
 
     if (!$this->_is_post()) {
-      $this->view('choose_provider');
+      $this->_render_wizard_view('choose_provider', [], 3, 'customer-onboarding/environment', '← Back');
       return;
     }
 
@@ -221,9 +221,7 @@ class Onboarding extends Trongate
       $this->validation->set_rules('ip_address', 'IP address',  'required|max_length[45]');
 
       if ($this->validation->run() !== true) {
-        $this->view('server_manual', [
-          'env' => $env,
-        ]);
+        $this->_render_wizard_view('server_manual', ['env' => $env], 4, 'customer-onboarding/choose_provider', '← Back');
         return;
       }
 
@@ -245,9 +243,7 @@ class Onboarding extends Trongate
       return;
     }
 
-    $this->view('server_manual', [
-      'env' => $env,
-    ]);
+    $this->_render_wizard_view('server_manual', ['env' => $env], 4, 'customer-onboarding/choose_provider', '← Back');
   }
 
   // ── Step 7: Create deployment ──────────────────────────────────
@@ -334,11 +330,11 @@ class Onboarding extends Trongate
       redirect('customer-onboarding/dns_ssl');
     }
 
-    $this->view('register_deployment', [
+    $this->_render_wizard_view('register_deployment', [
       'provider' => $server->provider ?? 'manual',
       'env'      => $env,
       'server'   => $server,
-    ]);
+    ], 7, 'customer-onboarding/dns_ssl', '← Back');
   }
 
   // ── Step 5b: Hetzner ────────────────────────────────────────────
@@ -408,9 +404,9 @@ class Onboarding extends Trongate
     $this->module('provider');
     $creds = $this->provider->model->get_hetzner((int) $customer->id);
 
-    $this->view('server_hetzner', [
+    $this->_render_wizard_view('server_hetzner', [
       'existing_token' => $creds['token'] ?? '',
-    ]);
+    ], 4, 'customer-onboarding/choose_provider', '← Back');
   }
 
   function configure_hetzner_server(): void
@@ -466,12 +462,12 @@ class Onboarding extends Trongate
       redirect('customer-onboarding/server_hetzner');
     }
 
-    $this->view('configure_hetzner_server', [
+    $this->_render_wizard_view('configure_hetzner_server', [
       'env'          => $env,
       'regions'      => $regions,
       'server_types' => $server_types,
       'importable'   => $importable,
-    ]);
+    ], 4, 'customer-onboarding/server_hetzner', '← Back', 'onboarding-card--wide');
   }
 
   function _try_hetzner_new(object $customer, object $env): ?int
@@ -611,11 +607,14 @@ class Onboarding extends Trongate
       redirect('customer');
       return;
     }
-    $this->view('provision_server', [
+    $_server_ipv6 = trim((string) ($server->ipv6_address ?? ''));
+    $_ipv6_part   = $_server_ipv6 !== '' ? ', ' . $_server_ipv6 : '';
+    $this->_render_wizard_view('provision_server', [
       'server'        => $server,
       'stream_url'    => BASE_URL . 'server/stream/' . (int) $server->id,
       'server_active' => $server->status === 'active',
-    ]);
+    ], 5, 'customer', 'Skip to Dashboard', '',
+      subheading: 'Installing the LAMP stack on ' . $server->name . ' (' . $server->ip_address . $_ipv6_part . '). This takes a few minutes.');
   }
 
   // ── Step 6: DNS & SSL ───────────────────────────────────────────
@@ -688,14 +687,14 @@ class Onboarding extends Trongate
 
   function _show_dns_ssl(object $server): void
   {
-    $this->view('dns_ssl', [
+    $this->_render_wizard_view('dns_ssl', [
       'server' => $server,
       'domain' => trim((string) ($server->domain ?? '')),
       'can_enable_ssl' => $this->_can_enable_ssl($server),
       'ssl_error' => $this->_ssl_preflight_error($server),
       'ssl_retryable_failure' => !empty($_SESSION['onboarding_ssl_retryable_failure']),
       'ssl_stream_url' => BASE_URL . 'customer-onboarding/ssl_stream',
-    ]);
+    ], 6, 'customer-onboarding/provision_server', '← Back', 'onboarding-card--large');
   }
 
   function ssl_stream(): void
@@ -770,10 +769,11 @@ class Onboarding extends Trongate
       redirect('customer');
       return;
     }
-    $this->view('deploy_app', [
+    $this->_render_wizard_view('deploy_app', [
       'deployment' => $deployment,
       'stream_url' => BASE_URL . 'deployment/stream/' . (int) $deployment->id,
-    ]);
+    ], 8, 'customer', 'Go to Dashboard', '',
+      subheading: 'Running deployment #' . (int) $deployment->id . ' on ' . $deployment->server_name . '.');
   }
 
   function complete(): void
@@ -1014,124 +1014,45 @@ class Onboarding extends Trongate
   {
     $user = $server->ssh_user ?: 'root';
     $port = (int) ($server->ssh_port ?: 22);
-    $timeout = RUNNER_SCRIPT_TIMEOUT;
-    $cmd =
-      'ssh' .
-      ' -i ' .
-      escapeshellarg(RUNNER_SSH_KEY) .
-      ' -o StrictHostKeyChecking=no' .
-      ' -o UserKnownHostsFile=/dev/null' .
-      ' -o LogLevel=ERROR' .
-      ' -o BatchMode=yes' .
-      ' -o ConnectTimeout=15' .
-      ' -o ServerAliveInterval=30' .
-      ' -o ServerAliveCountMax=3' .
-      ' -p ' .
-      $port .
-      ' ' .
-      escapeshellarg("{$user}@{$server->ip_address}") .
-      " \"timeout {$timeout} bash -s\" 2>&1";
 
-    $proc = proc_open(
-      $cmd,
-      [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['file', '/dev/null', 'w']],
-      $pipes,
+    $this->module('ssh');
+    $log = '';
+    $exit_code = $this->ssh->execute_script(
+      $server->ip_address,
+      $user,
+      $port,
+      $script,
+      function (string $line) use (&$log): void {
+        $log .= $line . "\n";
+      },
+      null,
+      RUNNER_SCRIPT_TIMEOUT,
     );
-    if (!is_resource($proc)) {
-      return [1, 'Failed to open SSH connection.'];
-    }
 
-    fwrite($pipes[0], str_replace(["\r\n", "\r"], "\n", $script));
-    fclose($pipes[0]);
-    $output = stream_get_contents($pipes[1]);
-    fclose($pipes[1]);
-
-    return [proc_close($proc), trim($output)];
+    return [$exit_code, trim($log)];
   }
 
   function _run_remote_bash_stream(object $server, string $script, callable $emit): array
   {
     $user = $server->ssh_user ?: 'root';
     $port = (int) ($server->ssh_port ?: 22);
-    $timeout = RUNNER_SCRIPT_TIMEOUT;
-    $cmd =
-      'ssh' .
-      ' -i ' .
-      escapeshellarg(RUNNER_SSH_KEY) .
-      ' -o StrictHostKeyChecking=no' .
-      ' -o UserKnownHostsFile=/dev/null' .
-      ' -o LogLevel=ERROR' .
-      ' -o BatchMode=yes' .
-      ' -o ConnectTimeout=15' .
-      ' -o ServerAliveInterval=30' .
-      ' -o ServerAliveCountMax=3' .
-      ' -p ' .
-      $port .
-      ' ' .
-      escapeshellarg("{$user}@{$server->ip_address}") .
-      " \"timeout {$timeout} bash -s\"";
 
-    $proc = proc_open(
-      $cmd,
-      [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
-      $pipes,
-    );
-    if (!is_resource($proc)) {
-      return [1, 'Failed to open SSH connection.'];
-    }
-
-    fwrite($pipes[0], str_replace(["\r\n", "\r"], "\n", $script));
-    fclose($pipes[0]);
-
-    stream_set_blocking($pipes[1], false);
-    stream_set_blocking($pipes[2], false);
-
+    $this->module('ssh');
     $log = '';
-    $open = [1 => $pipes[1], 2 => $pipes[2]];
-    $buf = [1 => '', 2 => ''];
+    $exit_code = $this->ssh->execute_script(
+      $server->ip_address,
+      $user,
+      $port,
+      $script,
+      function (string $line) use (&$log, $emit): void {
+        $log .= $line . "\n";
+        $emit($line);
+      },
+      fn() => $this->stream->ping('ssl-ping'),
+      RUNNER_SCRIPT_TIMEOUT,
+    );
 
-    while (!empty($open)) {
-      $read = array_values($open);
-      $w = $e = null;
-      $n = stream_select($read, $w, $e, 15);
-      if ($n === false) {
-        break;
-      }
-      if ($n === 0) {
-        $this->stream->ping('ssl-ping');
-        continue;
-      }
-
-      foreach ($read as $fh) {
-        $chunk = fread($fh, 4096);
-        if ($chunk !== false && $chunk !== '') {
-          $key = $fh === $pipes[1] ? 1 : 2;
-          $buf[$key] .= $chunk;
-          $log .= $chunk;
-          while (($nl = strpos($buf[$key], "\n")) !== false) {
-            $line = substr($buf[$key], 0, $nl);
-            $buf[$key] = substr($buf[$key], $nl + 1);
-            if ($line !== '') {
-              $emit(rtrim($line, "\r"));
-            }
-          }
-        }
-
-        if (feof($fh)) {
-          $key = $fh === $pipes[1] ? 1 : 2;
-          if ($buf[$key] !== '') {
-            $emit(rtrim($buf[$key], "\r\n"));
-            $buf[$key] = '';
-          }
-          $open = array_filter($open, static fn($pipe) => $pipe !== $fh);
-        }
-      }
-    }
-
-    fclose($pipes[1]);
-    fclose($pipes[2]);
-
-    return [proc_close($proc), trim($log)];
+    return [$exit_code, trim($log)];
   }
 
   function _ssl_failure_message(string $log, int $exit_code): string
@@ -1221,5 +1142,61 @@ class Onboarding extends Trongate
     if ($customer === false) redirect('customer/login');
 
     return $customer;
+  }
+
+  // ── Wizard rendering ────────────────────────────────────────────
+
+  /**
+   * Render an onboarding partial view inside the shared wizard template.
+   *
+   * @param string      $view_file   Partial view filename (without .php)
+   * @param array       $data        Data to pass to the partial view
+   * @param int         $step        Current step number
+   * @param string      $back_url    Back/cancel link href
+   * @param string      $back_text   Back/cancel link label
+   * @param string      $card_class  Extra CSS class(es) for .onboarding-card (default '')
+   * @param string|null $subheading  Override subheading (null = use lookup table default)
+   */
+  function _render_wizard_view(
+    string $view_file,
+    array $data,
+    int $step,
+    string $back_url,
+    string $back_text,
+    string $card_class = '',
+    ?string $subheading = null,
+  ): void {
+    static $meta = [
+      'ssh_key'                  => ['SSH Key — Provision Setup',                    '&#128273; Add Your SSH Key',         "Your public key will be embedded into every LAMP setup script, so you can SSH into your servers the moment they're provisioned.", ''],
+      'environment'              => ['First Environment — Provision Setup',           '&#9670; Your First Environment',     "An environment defines your app's runtime and infrastructure. Source code and git details are set per deployment.",            ''],
+      'choose_provider'          => ['Choose Provider — Provision Setup',             'How will you provision servers?',    'Choose how you want to add your first server. You can use both methods later from the dashboard.',                          'onboarding-card--standard'],
+      'server_manual'            => ['Add Server — Provision Setup',                  '&#9646; Your Server',                "Enter your server's details. Provision will generate a LAMP setup script you can run via SSH.",                             'onboarding-card--standard'],
+      'server_hetzner'           => ['Connect Hetzner — Provision Setup',             '&#9729; Connect Hetzner Cloud',      'Enter your API token. Provision will validate it and upload your SSH key so servers are accessible the moment they boot.',   'onboarding-card--standard'],
+      'configure_hetzner_server' => ['Configure Hetzner Server — Provision Setup',   '&#9729; Configure Hetzner Server',   'Select or create the server that Provision will prepare for this environment.',                                             'onboarding-card--wide'],
+      'provision_server'         => ['Provisioning Server — Provision Setup',         '&#9881; Provisioning Server',        '',                                                                                                                         ''],
+      'dns_ssl'                  => ['DNS &amp; SSL — Provision Setup',               '&#128274; DNS &amp; SSL',            "Point your domain at the provisioned server, then optionally run Let's Encrypt before registering the deployment.",         'onboarding-card--large'],
+      'register_deployment'      => ['Create Deployment — Provision Setup',           '&#9654; Create Deployment',          'Confirm your provisioned server and app source. Provision will run the deployment script next.',                             'onboarding-card--standard'],
+      'deploy_app'               => ['Deploying App — Provision Setup',               '&#10148; Deploying App',             '',                                                                                                                         ''],
+    ];
+
+    [$title, $heading, $default_subheading, $default_card_class] = $meta[$view_file] ?? [$view_file, $view_file, '', ''];
+
+    $data = array_merge($data, [
+      'view_module'      => 'customer/onboarding',
+      'view_file'        => $view_file,
+      'wizard_title'     => $title,
+      'wizard_heading'   => $heading,
+      'wizard_subheading'=> $subheading ?? $default_subheading,
+      'wizard_css'       => 'customer-onboarding_module/css/onboarding.css',
+      'wizard_card_class'=> $card_class !== '' ? $card_class : $default_card_class,
+      'wizard_step_num'  => $step,
+      'wizard_step_total'=> 8,
+      'wizard_back_url'  => $back_url,
+      'wizard_back_text' => $back_text,
+      'wizard_js'        => 'customer-onboarding_module/js/onboarding.js',
+    ]);
+
+    $this->module('templates');
+    $this->templates->wizard($data);
   }
 }

@@ -1,11 +1,3 @@
-<?php
-$wizard_title      = 'First Environment — Provision Setup';
-$wizard_css        = 'customer-onboarding_module/css/onboarding.css';
-$wizard_heading    = '&#9670; Your First Environment';
-$wizard_subheading = 'An environment defines your app\'s runtime and infrastructure. Source code and git details are set per deployment.';
-$wizard_card_class = '';
-include APPPATH . 'modules/wizard/views/open.php';
-?>
 <style>
     .form-row   { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
     .form-hint  { font-size: 0.78rem; color: #9ca3af; margin-top: 0.25rem; display: block; }
@@ -16,7 +8,6 @@ include APPPATH . 'modules/wizard/views/open.php';
     .svc-label input { margin: 0; }
     .svc-label:has(input:checked) { border-color: #6366f1; background: #f5f3ff; }
 </style>
-<?php
 
     <?= validation_errors('<div class="error-message">', '</div>') ?>
 
@@ -135,11 +126,3 @@ include APPPATH . 'modules/wizard/views/open.php';
         Create &amp; Continue
     </button>
     <?= form_close() ?>
-
-<?php
-$wizard_step_num   = 2;
-$wizard_step_total = 8;
-$wizard_back_url   = 'customer-onboarding/ssh_key';
-$wizard_back_text  = '← Back';
-$wizard_js         = 'customer-onboarding_module/js/onboarding.js';
-include APPPATH . 'modules/wizard/views/close.php';

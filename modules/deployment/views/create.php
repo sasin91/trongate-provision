@@ -1,5 +1,14 @@
 <?php
-require_once APPPATH . 'modules/wizard/views/helpers.php';
+if (!function_exists('wizard_step_dots')) {
+    function wizard_step_dots(array $classes, string $container_class = 'steps'): string {
+        $html = '<div class="' . htmlspecialchars($container_class) . '">';
+        foreach ($classes as $c) {
+            $attr = $c ? ' ' . htmlspecialchars((string) $c) : '';
+            $html .= '<div class="step-dot' . $attr . '"></div>';
+        }
+        return $html . '</div>';
+    }
+}
 $has_deployment = !empty($deployment) && $deployment !== false;
 $status = $has_deployment ? (string) $deployment->status : "new";
 $deployment_id = $has_deployment ? (int) $deployment->id : 0;

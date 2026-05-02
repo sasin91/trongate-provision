@@ -1,11 +1,3 @@
-<?php
-$wizard_title      = 'Deploying App — Provision Setup';
-$wizard_css        = 'customer-onboarding_module/css/onboarding.css';
-$wizard_heading    = '&#10148; Deploying App';
-$wizard_subheading = 'Running deployment #' . (int) $deployment->id . ' on ' . $deployment->server_name . '.';
-$wizard_card_class = '';
-include APPPATH . 'modules/wizard/views/open.php';
-?>
 <style>
     #log-pre {
         background: #0f172a;
@@ -46,12 +38,6 @@ include APPPATH . 'modules/wizard/views/open.php';
                style="font-size:.8rem;color:#9ca3af">View deployment details</a>
         </p>
     </div>
-
-    <p class="onboarding-footer-note">
-        Step 8 of 8 &mdash;
-        <a href="customer">Go to Dashboard</a>
-    </p>
-</div>
 
 <script>
 (function () {
@@ -115,6 +101,3 @@ include APPPATH . 'modules/wizard/views/open.php';
     };
 })();
 </script>
-
-</body>
-</html>
