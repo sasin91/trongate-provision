@@ -80,7 +80,7 @@ if ($status === "success") {
     <?php elseif (empty($environments)): ?>
       <div class="error-message">You need to <a href="environment/create">create an environment</a> first.</div>
     <?php else: ?>
-      <form method="post" action="<?= htmlspecialchars($form_location) ?>" enctype="multipart/form-data">
+      <?= form_open_upload($form_location) ?>
         <div class="form-row">
           <div class="form-group">
             <label class="form-label">Environment</label>
@@ -149,10 +149,10 @@ if ($status === "success") {
         <div class="info-box">Provision stages files into <code>/var/www/releases</code>, lists SQL files for manual review, deletes those SQL files from the staged release, then promotes the symlink.</div>
 
         <div class="form-actions">
-          <button type="submit" class="btn-primary"><span class="spinner"></span>Create staged deployment</button>
+          <button type="submit" name="submit" value="Create Deployment" class="btn-primary"><span class="spinner"></span>Create staged deployment</button>
           <a href="deployment" class="btn-secondary-onboarding">Cancel</a>
         </div>
-      </form>
+      <?= form_close() ?>
     <?php endif; ?>
   <?php else: ?>
     <div class="summary-box">

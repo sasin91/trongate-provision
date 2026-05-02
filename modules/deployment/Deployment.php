@@ -30,7 +30,7 @@ class Deployment extends Trongate
   {
     $customer = $this->_require_customer();
 
-    if ($_SERVER["REQUEST_METHOD"] === "POST") {
+    if (post('submit', true) === 'Create Deployment') {
       $source_type = post("source_type", true) === "zip" ? "zip" : "git";
       $this->validation->set_rules("server_id", "server", "required");
       $this->validation->set_rules("environment_id", "environment", "required");
@@ -123,7 +123,7 @@ class Deployment extends Trongate
 
     $wizard_id = (int) segment(3);
     $wizard_deployment = false;
-    if ($wizard_id > 0 && $_SERVER["REQUEST_METHOD"] !== "POST") {
+    if ($wizard_id > 0 && post('submit', true) !== 'Create Deployment') {
       $wizard_deployment = $this->model->get($wizard_id, (int) $customer->id);
       if ($wizard_deployment === false) {
         redirect("deployment/create");
