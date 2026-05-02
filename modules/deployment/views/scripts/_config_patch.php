@@ -16,7 +16,7 @@
 
 $db_name = $env_vars["DB_NAME"] ?? $db;
 $db_user = $env_vars["DB_USER"] ?? "";
-$db_pass = $env_vars["DB_PASSWORD"] ?? "";
+$db_password = $env_vars["DB_PASSWORD"] ?? "";
 ?>
 # ── Config file patches ───────────────────────────────────────────
 _patch_define() {
@@ -51,7 +51,7 @@ $databases = [
         'host'     => '127.0.0.1',
         'port'     => '3306',
         'user'     => '<?= $db_user ?>',
-        'password' => '<?= $db_pass ?>',
+        'password' => '<?= $db_password ?>',
         'database' => '<?= $db_name ?>',
     ],
 ];

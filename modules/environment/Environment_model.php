@@ -26,6 +26,43 @@ class Environment_model extends Model {
         return $this->db->insert($data, 'environment');
     }
 
+    function create_with_defaults(
+        int $customer_id,
+        string $name,
+        string $php_version,
+        ?string $domain = null,
+        array $variables = []
+    ): int|false {
+        $db_name = $this->slug_db_name($name);
+        $env_id = $this->create([
+            'customer_id' => $customer_id,
+            'name'        => $name,
+            'php_version' => $php_version,
+            'web_root'    => '/var/www/html',
+            'domain'      => $domain ?: null,
+            'db_name'     => $db_name,
+        ]);
+
+        if ($env_id === false) {
+            return false;
+        }
+
+        $db_password = bin2hex(random_bytes(16));
+        $this->save_variables((int) $env_id, $customer_id, array_merge([
+            'DB_NAME'     => $db_name,
+            'DB_USER'     => $db_name,
+            'DB_PASSWORD' => $db_password,
+        ], $variables));
+
+        return (int) $env_id;
+    }
+
+    function slug_db_name(string $name): string {
+        $slug = strtolower(trim($name));
+        $slug = preg_replace('/[^a-z0-9]+/', '_', $slug);
+        return trim($slug, '_');
+    }
+
     function delete(int $id, int $customer_id): bool {
         $this->db->query_bind(
             "DELETE FROM health_check WHERE target_type = 'service' AND target_id IN (

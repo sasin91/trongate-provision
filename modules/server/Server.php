@@ -556,10 +556,14 @@ class Server extends Trongate
     $env_vars = $this->environment->model->decrypt_blob(
       $s->env_variables_enc ?? "",
     );
-    $db_name =
-      $env_vars["DB_NAME"] ?? ($env_vars["db_name"] ?? ($s->db_name ?? ""));
-    $db_user = $env_vars["DB_USER"] ?? ($env_vars["db_user"] ?? "");
-    $db_pass = $env_vars["DB_PASSWORD"] ?? ($env_vars["db_password"] ?? "");
+    $env_vars = $this->_ensure_database_environment_variables(
+      $env_vars,
+      $s,
+      (int) $customer->id,
+    );
+    $db_name = $env_vars["DB_NAME"] ?? ($s->db_name ?? "");
+    $db_user = $env_vars["DB_USER"] ?? "";
+    $db_password = $env_vars["DB_PASSWORD"] ?? "";
 
     $q = static fn(string $v): string => "'" .
       str_replace("'", "'\\''", $v) .
@@ -572,7 +576,7 @@ class Server extends Trongate
         "DOMAIN" => $s->domain ?? "",
         "DB_NAME" => $db_name,
         "DB_USER" => $db_user,
-        "DB_PASSWORD" => $db_pass,
+        "DB_PASSWORD" => $db_password,
       ]
       as $k => $v
     ) {
@@ -827,6 +831,44 @@ class Server extends Trongate
       ["view_module" => "server"],
       true,
     );
+  }
+
+  private function _ensure_database_environment_variables(
+    array $env_vars,
+    object $server,
+    int $customer_id,
+  ): array {
+    $env_id = (int) ($server->environment_id ?? 0);
+    if ($env_id <= 0) {
+      return $env_vars;
+    }
+
+    $db_name = (string) ($env_vars["DB_NAME"] ?? ($server->db_name ?? ""));
+    $db_user = (string) ($env_vars["DB_USER"] ?? "");
+    $db_password = (string) ($env_vars["DB_PASSWORD"] ?? "");
+    if ($db_name === "") {
+      return $env_vars;
+    }
+
+    $changed = false;
+    if (($env_vars["DB_NAME"] ?? "") === "") {
+      $env_vars["DB_NAME"] = $db_name;
+      $changed = true;
+    }
+    if (($env_vars["DB_USER"] ?? "") === "") {
+      $env_vars["DB_USER"] = $db_user !== "" ? $db_user : $db_name;
+      $changed = true;
+    }
+    if (($env_vars["DB_PASSWORD"] ?? "") === "") {
+      $env_vars["DB_PASSWORD"] =
+        $db_password !== "" ? $db_password : bin2hex(random_bytes(16));
+      $changed = true;
+    }
+    if ($changed) {
+      $this->environment->model->save_variables($env_id, $customer_id, $env_vars);
+    }
+
+    return $env_vars;
   }
 
   private function _render_certbot_script(object $server): string

@@ -109,40 +109,6 @@ class Onboarding extends Trongate
       return;
     }
 
-    $name    = post('name', true);
-    $db_name = trim(preg_replace('/[^a-z0-9]+/', '_', strtolower($name)), '_');
-
-    $env_id = $this->model->create_environment([
-      'customer_id' => (int) $customer->id,
-      'name'        => $name,
-      'php_version' => post('php_version', true),
-      'web_root'    => '/var/www/html',
-      'domain'      => post('domain', true) ?: null,
-      'db_name'     => $db_name,
-    ]);
-
-    $allowed = [
-      'apache2'    => ['type' => 'http',        'port' => 80,   'name' => 'Apache2'],
-      'mariadb'    => ['type' => 'mysql',        'port' => 3306, 'name' => 'MariaDB'],
-      'redis'      => ['type' => 'redis',        'port' => 6379, 'name' => 'Redis'],
-      'postgresql' => ['type' => 'postgresql',   'port' => 5432, 'name' => 'PostgreSQL'],
-    ];
-
-    $selected = (array) ($_POST['services'] ?? []);
-    foreach ($selected as $svc) {
-      if (!isset($allowed[$svc])) continue;
-      $def = $allowed[$svc];
-      $this->db->insert([
-        'environment_id' => (int) $env_id,
-        'customer_id'    => (int) $customer->id,
-        'name'           => $def['name'],
-        'type'           => $def['type'],
-        'host'           => $def['type'] === 'http' ? (post('domain', true) ?: null) : null,
-        'port'           => $def['port'],
-        'status'         => 'pending',
-      ], 'service');
-    }
-
     $cfg_patches = array_filter([
       'PROVISION_ENV'          => post('cfg_env', true),
       'PROVISION_WEBSITE_NAME' => post('cfg_website_name', true),
@@ -153,11 +119,26 @@ class Onboarding extends Trongate
     ], fn($v) => $v !== '' && $v !== null);
 
     $this->module('environment');
-    $this->environment->model->save_variables((int) $env_id, (int) $customer->id, array_merge([
-      'DB_NAME'     => $db_name,
-      'DB_USER'     => $db_name,
-      'DB_PASSWORD' => bin2hex(random_bytes(16)),
-    ], $cfg_patches));
+    $env_id = $this->environment->model->create_with_defaults(
+      (int) $customer->id,
+      post('name', true),
+      post('php_version', true),
+      post('domain', true) ?: null,
+      $cfg_patches,
+    );
+    if ($env_id === false) {
+      $_SESSION['flash_error'] = 'Environment could not be created.';
+      $this->_render_wizard_view('environment', ['php_versions' => $this->php_versions], 2, 'customer-onboarding/ssh_key', '← Back');
+      return;
+    }
+
+    $this->module('environment-services');
+    $this->services->model->create_defaults_for_environment(
+      (int) $env_id,
+      (int) $customer->id,
+      (array) ($_POST['services'] ?? []),
+      post('domain', true) ?: null,
+    );
 
     redirect('customer-onboarding/choose_provider');
   }

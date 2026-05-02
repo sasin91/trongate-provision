@@ -31,22 +31,18 @@ class Environment extends Trongate {
             $this->validation->set_rules('php_version', 'PHP version', 'required');
 
             if ($this->validation->run() === true) {
-                $name    = post('name', true);
-                $db_name = $this->_slug_db_name($name);
-
-                $env_id = $this->model->create([
-                    'customer_id' => (int) $customer->id,
-                    'name'        => $name,
-                    'php_version' => post('php_version', true),
-                    'web_root'    => '/var/www/html',
-                    'domain'      => post('domain', true) ?: null,
-                    'db_name'     => $db_name,
-                ]);
-                $this->model->save_variables((int) $env_id, (int) $customer->id, [
-                    'DB_NAME'     => $db_name,
-                    'DB_USER'     => $db_name,
-                    'DB_PASSWORD' => bin2hex(random_bytes(16)),
-                ]);
+                $name = post('name', true);
+                $env_id = $this->model->create_with_defaults(
+                    (int) $customer->id,
+                    $name,
+                    post('php_version', true),
+                    post('domain', true) ?: null,
+                );
+                if ($env_id === false) {
+                    $_SESSION['flash_error'] = 'Environment could not be created.';
+                    redirect('environment/create');
+                    return;
+                }
                 $this->_emit('EnvironmentCreated', 'environment', (int) $env_id, [
                     'name'        => $name,
                     'php_version' => post('php_version', true),
@@ -165,12 +161,6 @@ class Environment extends Trongate {
         ]);
         $_SESSION['flash_success'] = 'Environment deleted.';
         redirect('environment');
-    }
-
-    private function _slug_db_name(string $name): string {
-        $slug = strtolower(trim($name));
-        $slug = preg_replace('/[^a-z0-9]+/', '_', $slug);
-        return trim($slug, '_');
     }
 
     private function _require_customer(): object {

@@ -66,10 +66,6 @@ class Onboarding_model extends Model {
         return $rows[0] ?? false;
     }
 
-    function create_environment(array $data): int|false {
-        return $this->db->insert($data, 'environment');
-    }
-
     function create_server(array $data): int|false {
         return $this->db->insert($data, 'server');
     }
