@@ -89,7 +89,7 @@ class Deployment extends Trongate
             $zip_path = $this->_fetch_zip_from_provider(
               (string) post("repo_url", true),
               (string) post("branch", true),
-            );
+            ) ?: null;
           }
 
           $id = $this->model->create([
