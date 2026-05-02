@@ -582,29 +582,13 @@ class Server extends Trongate
     }
 
     $script = str_replace(["\r\n", "\r"], "\n", $exports . $this->_default_provision_script());
-    $timeout = RUNNER_SCRIPT_TIMEOUT;
-
-    $cmd =
-      "ssh" .
-      " -i " .
-      escapeshellarg(RUNNER_SSH_KEY) .
-      " -o StrictHostKeyChecking=no" .
-      " -o UserKnownHostsFile=/dev/null" .
-      " -o LogLevel=ERROR" .
-      " -o BatchMode=yes" .
-      " -o ConnectTimeout=15" .
-      " -o ServerAliveInterval=30" .
-      " -o ServerAliveCountMax=3" .
-      " -p " .
-      $port .
-      " " .
-      escapeshellarg("{$user}@{$s->ip_address}") .
-      " \"timeout {$timeout} bash -s\"";
 
     $provider = strtolower((string) ($s->provider ?? ""));
     $max_ssh_attempts = $provider === "hetzner" ? 20 : 3;
     $retry_delay = 15;
     $exit_code = 255;
+
+    $this->module("ssh");
 
     for ($attempt = 1; $attempt <= $max_ssh_attempts; $attempt++) {
       if ($attempt === 1) {
@@ -615,68 +599,19 @@ class Server extends Trongate
         );
       }
 
-      $proc = proc_open(
-        $cmd,
-        [0 => ["pipe", "r"], 1 => ["pipe", "w"], 2 => ["pipe", "w"]],
-        $pipes,
-      );
-      if (!is_resource($proc)) {
-        $emit("Failed to open SSH connection.");
-        $this->stream->done(["status" => "failed"]);
-        $this->model->mark_result($id, "failed");
-        return;
-      }
-
-      fwrite($pipes[0], $script);
-      fclose($pipes[0]);
-
-      stream_set_blocking($pipes[1], false);
-      stream_set_blocking($pipes[2], false);
-
       $attempt_log = "";
-      $open = [1 => $pipes[1], 2 => $pipes[2]];
-      $buf = [1 => "", 2 => ""];
-
-      while (!empty($open)) {
-        $read = array_values($open);
-        $w = $e = null;
-        $n = stream_select($read, $w, $e, 15);
-        if ($n === false) {
-          break;
-        }
-        if ($n === 0) {
-          $this->stream->ping();
-          continue;
-        }
-
-        foreach ($read as $fh) {
-          $chunk = fread($fh, 4096);
-          if ($chunk !== false && $chunk !== "") {
-            $key = $fh === $pipes[1] ? 1 : 2;
-            $buf[$key] .= $chunk;
-            $attempt_log .= $chunk;
-            while (($nl = strpos($buf[$key], "\n")) !== false) {
-              $line = substr($buf[$key], 0, $nl);
-              $buf[$key] = substr($buf[$key], $nl + 1);
-              if ($line !== "") {
-                $emit(rtrim($line, "\r"));
-              }
-            }
-          }
-          if (feof($fh)) {
-            $key = $fh === $pipes[1] ? 1 : 2;
-            if ($buf[$key] !== "") {
-              $emit(rtrim($buf[$key], "\r\n"));
-              $buf[$key] = "";
-            }
-            $open = array_filter($open, static fn($p) => $p !== $fh);
-          }
-        }
-      }
-
-      fclose($pipes[1]);
-      fclose($pipes[2]);
-      $exit_code = proc_close($proc);
+      $exit_code = $this->ssh->execute_script(
+        $s->ip_address,
+        $user,
+        $port,
+        $script,
+        function (string $line) use (&$attempt_log, $emit): void {
+          $attempt_log .= $line . "\n";
+          $emit($line);
+        },
+        fn() => $this->stream->ping(),
+        RUNNER_SCRIPT_TIMEOUT,
+      );
 
       if ($exit_code === 0) {
         break;
@@ -910,39 +845,22 @@ class Server extends Trongate
   {
     $user = $server->ssh_user ?: "root";
     $port = (int) ($server->ssh_port ?: 22);
-    $timeout = RUNNER_SCRIPT_TIMEOUT;
-    $cmd =
-      "ssh" .
-      " -i " .
-      escapeshellarg(RUNNER_SSH_KEY) .
-      " -o StrictHostKeyChecking=no" .
-      " -o UserKnownHostsFile=/dev/null" .
-      " -o LogLevel=ERROR" .
-      " -o BatchMode=yes" .
-      " -o ConnectTimeout=15" .
-      " -o ServerAliveInterval=30" .
-      " -o ServerAliveCountMax=3" .
-      " -p " .
-      $port .
-      " " .
-      escapeshellarg("{$user}@{$server->ip_address}") .
-      " \"timeout {$timeout} bash -s\" 2>&1";
 
-    $proc = proc_open(
-      $cmd,
-      [0 => ["pipe", "r"], 1 => ["pipe", "w"], 2 => ["file", "/dev/null", "w"]],
-      $pipes,
+    $this->module("ssh");
+    $log = "";
+    $exit_code = $this->ssh->execute_script(
+      $server->ip_address,
+      $user,
+      $port,
+      $script,
+      function (string $line) use (&$log): void {
+        $log .= $line . "\n";
+      },
+      null,
+      RUNNER_SCRIPT_TIMEOUT,
     );
-    if (!is_resource($proc)) {
-      return [1, "Failed to open SSH connection."];
-    }
 
-    fwrite($pipes[0], str_replace(["\r\n", "\r"], "\n", $script));
-    fclose($pipes[0]);
-    $output = stream_get_contents($pipes[1]);
-    fclose($pipes[1]);
-
-    return [proc_close($proc), trim($output)];
+    return [$exit_code, trim($log)];
   }
 
   private function _ssl_failure_message(string $log, int $exit_code): string

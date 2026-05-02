@@ -291,21 +291,6 @@ class Deployment extends Trongate
     if (!empty($d->zip_path) && file_exists($d->zip_path)) {
       $remote_zip = "/tmp/provision_deploy_" . $id . "_" . time() . ".zip";
       $emit("Uploading application zip…");
-      $scp =
-        "scp" .
-        " -i " .
-        escapeshellarg(RUNNER_SSH_KEY) .
-        " -o StrictHostKeyChecking=accept-new" .
-        " -o UserKnownHostsFile=/dev/null" .
-        " -o LogLevel=ERROR" .
-        " -o BatchMode=yes" .
-        " -o ConnectTimeout=15" .
-        " -P " .
-        $port .
-        " " .
-        escapeshellarg($d->zip_path) .
-        " " .
-        escapeshellarg("{$user}@{$d->ip_address}:{$remote_zip}");
       $scp_result = $this->ssh->scp_upload($d->zip_path, $d->ip_address, $user, $port, $remote_zip);
       if (!$scp_result['success']) {
         $msg = "SCP failed: " . $scp_result['output'];
