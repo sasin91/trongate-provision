@@ -8,7 +8,7 @@ class Cloud extends Trongate {
     }
 
     function hetzner(string $token): Hetzner {
-        require_once __DIR__ . '/clients/Client.php';
+        require_once APPPATH . 'modules/http/client/Client.php';
         require_once __DIR__ . '/clients/Hetzner.php';
         return new Hetzner($token);
     }

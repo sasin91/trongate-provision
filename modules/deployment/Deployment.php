@@ -977,26 +977,20 @@ class Deployment extends Trongate
       return false;
     }
 
-    $ch = curl_init($archive_url);
-    curl_setopt_array($ch, [
-      CURLOPT_RETURNTRANSFER => true,
-      CURLOPT_FOLLOWLOCATION => true,
-      CURLOPT_MAXREDIRS      => 5,
-      CURLOPT_TIMEOUT        => 60,
-      CURLOPT_USERAGENT      => 'Provision-Deploy/1.0',
-      CURLOPT_SSL_VERIFYPEER => true,
-      CURLOPT_SSL_VERIFYHOST => 2,
-    ]);
-    $data      = curl_exec($ch);
-    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
+    $this->module('http-client');
+    try {
+      $result = $this->client->fetch($archive_url);
+    } catch (Client_Error $e) {
+      return false;
+    }
 
-    if ($data === false || $http_code !== 200 || strlen($data) < 100) {
+    if ($result['status'] !== 200 || strlen($result['body']) < 100) {
       return false;
     }
-    if (strncmp($data, "PK\x03\x04", 4) !== 0) {
+    if (strncmp($result['body'], "PK\x03\x04", 4) !== 0) {
       return false;
     }
+    $data = $result['body'];
 
     $this->module("storage");
     return $this->storage->put('deploy_zips/provision_deploy_' . hash('sha256', $data) . '.zip', $data);

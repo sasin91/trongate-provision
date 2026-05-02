@@ -4,7 +4,7 @@
  * Hetzner Cloud Provider
  * https://docs.hetzner.cloud/
  */
-class Hetzner extends Client {
+class Hetzner extends Api_client {
 
     private string $api_base = 'https://api.hetzner.cloud/v1';
 
