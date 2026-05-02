@@ -1,4 +1,5 @@
 <?php
+require_once APPPATH . 'modules/wizard/views/helpers.php';
 $has_deployment = !empty($deployment) && $deployment !== false;
 $status = $has_deployment ? (string) $deployment->status : "new";
 $deployment_id = $has_deployment ? (int) $deployment->id : 0;
@@ -44,11 +45,7 @@ if ($status === "success") {
     <p><?= $has_deployment ? "Stage, review SQL files, and promote deployment #" . (int) $deployment->id . "." : "Create a staged release before switching the live web root." ?></p>
   </div>
 
-  <div class="steps steps--compact">
-    <?php foreach ($step_classes as $class): ?>
-      <div class="step-dot <?= htmlspecialchars($class) ?>"></div>
-    <?php endforeach; ?>
-  </div>
+  <?= wizard_step_dots($step_classes, 'steps steps--compact') ?>
 
   <?php if (!empty($_SESSION['form_submission_errors'])): ?>
     <div class="error-message">

@@ -1,19 +1,11 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <base href="<?= BASE_URL ?>">
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Choose Provider — Provision Setup</title>
-    <link rel="stylesheet" href="customer-onboarding_module/css/onboarding.css">
-</head>
-<body>
-
-<div class="onboarding-card onboarding-card--standard">
-    <div class="onboarding-header">
-        <h1>How will you provision servers?</h1>
-        <p>Choose how you want to add your first server. You can use both methods later from the dashboard.</p>
-    </div>
+<?php
+$wizard_title      = 'Choose Provider — Provision Setup';
+$wizard_css        = 'customer-onboarding_module/css/onboarding.css';
+$wizard_heading    = 'How will you provision servers?';
+$wizard_subheading = 'Choose how you want to add your first server. You can use both methods later from the dashboard.';
+$wizard_card_class = 'onboarding-card--standard';
+include APPPATH . 'modules/wizard/views/open.php';
+?>
 
     <?= form_open('customer-onboarding/choose_provider') ?>
 
@@ -37,17 +29,7 @@
 
     </div>
 
-    <div class="steps">
-        <div class="step-dot completed"></div>
-        <div class="step-dot completed"></div>
-        <div class="step-dot completed"></div>
-        <div class="step-dot active"></div>
-        <div class="step-dot"></div>
-        <div class="step-dot"></div>
-        <div class="step-dot"></div>
-        <div class="step-dot"></div>
-        <div class="step-dot"></div>
-    </div>
+    <?= wizard_step_dots(wizard_step_classes(8, 3)) ?>
 
     <button type="submit" class="btn-primary" id="continue-btn" disabled>
         <div class="spinner"></div>
@@ -55,11 +37,10 @@
     </button>
     <?= form_close() ?>
 
-    <p class="onboarding-footer-note">
-        Step 3 of 8 &mdash; <a href="customer-onboarding/environment">&#8592; Back</a>
-    </p>
-</div>
-
-<script src="customer-onboarding_module/js/onboarding.js"></script>
-</body>
-</html>
+<?php
+$wizard_step_num   = 3;
+$wizard_step_total = 8;
+$wizard_back_url   = 'customer-onboarding/environment';
+$wizard_back_text  = '← Back';
+$wizard_js         = 'customer-onboarding_module/js/onboarding.js';
+include APPPATH . 'modules/wizard/views/close.php';

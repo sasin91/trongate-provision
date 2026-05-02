@@ -1,21 +1,13 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <base href="<?= BASE_URL ?>">
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Create Deployment — Provision Setup</title>
-    <link rel="stylesheet" href="customer-onboarding_module/css/onboarding.css">
-</head>
-<body>
+<?php
+$wizard_title      = 'Create Deployment — Provision Setup';
+$wizard_css        = 'customer-onboarding_module/css/onboarding.css';
+$wizard_heading    = '&#9654; Create Deployment';
+$wizard_subheading = 'Confirm your provisioned server and app source. Provision will run the deployment script next.';
+$wizard_card_class = 'onboarding-card--standard';
+include APPPATH . 'modules/wizard/views/open.php';
 
-<?php $_src_partial = __DIR__ . '/_source_fields.php'; ?>
-
-<div class="onboarding-card onboarding-card--standard">
-    <div class="onboarding-header">
-        <h1>&#9654; Create Deployment</h1>
-        <p>Confirm your provisioned server and app source. Provision will run the deployment script next.</p>
-    </div>
+$_src_partial = __DIR__ . '/_source_fields.php';
+?>
 
     <?= validation_errors('<div class="error-message">', '</div>') ?>
 
@@ -43,16 +35,7 @@
 
     <?php include $_src_partial ?>
 
-    <div class="steps">
-        <div class="step-dot completed"></div>
-        <div class="step-dot completed"></div>
-        <div class="step-dot completed"></div>
-        <div class="step-dot completed"></div>
-        <div class="step-dot completed"></div>
-        <div class="step-dot completed"></div>
-        <div class="step-dot active"></div>
-        <div class="step-dot"></div>
-    </div>
+    <?= wizard_step_dots(wizard_step_classes(8, 7)) ?>
 
     <button type="submit" class="btn-primary">
         <div class="spinner"></div>
@@ -60,12 +43,10 @@
     </button>
     <?= form_close() ?>
 
-    <p class="onboarding-footer-note">
-        Step 7 of 8 &mdash;
-        <a href="customer-onboarding/dns_ssl">&#8592; Back</a>
-    </p>
-</div>
-
-<script src="customer-onboarding_module/js/onboarding.js"></script>
-</body>
-</html>
+<?php
+$wizard_step_num   = 7;
+$wizard_step_total = 8;
+$wizard_back_url   = 'customer-onboarding/dns_ssl';
+$wizard_back_text  = '← Back';
+$wizard_js         = 'customer-onboarding_module/js/onboarding.js';
+include APPPATH . 'modules/wizard/views/close.php';

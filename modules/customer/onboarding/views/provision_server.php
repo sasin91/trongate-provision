@@ -1,16 +1,21 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <base href="<?= BASE_URL ?>">
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Provisioning Server — Provision Setup</title>
-    <link rel="stylesheet" href="customer-onboarding_module/css/onboarding.css">
-    <style>
+<?php
+$_server_ipv6 = trim((string) ($server->ipv6_address ?? ''));
+$_ipv6_part   = $_server_ipv6 !== ''
+    ? ', <code>' . htmlspecialchars($_server_ipv6) . '</code>'
+    : '';
+
+$wizard_title           = 'Provisioning Server — Provision Setup';
+$wizard_css             = 'customer-onboarding_module/css/onboarding.css';
+$wizard_heading         = '&#9881; Provisioning Server';
+$wizard_subheading_html = 'Installing the LAMP stack on <strong>' . htmlspecialchars($server->name) . '</strong>'
+    . ' (<code>' . htmlspecialchars($server->ip_address) . '</code>' . $_ipv6_part . '). This takes a few minutes.';
+$wizard_card_class = '';
+$wizard_card_style = 'max-width:560px';
+$wizard_css_inline = '
         #log-pre {
             background: #0f172a;
             color: #e2e8f0;
-            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+            font-family: \'SFMono-Regular\', Consolas, \'Liberation Mono\', Menlo, monospace;
             font-size: .775rem;
             line-height: 1.6;
             padding: 1rem 1.125rem;
@@ -27,46 +32,23 @@
             color: var(--text-muted);
             min-height: 1.25rem;
             margin-bottom: .75rem;
-        }
-    </style>
-</head>
-<body>
-
-<?php $server_ipv6 = trim((string) ($server->ipv6_address ?? '')); ?>
-
-<div class="onboarding-card" style="max-width:560px">
-    <div class="onboarding-header">
-        <h1>&#9881; Provisioning Server</h1>
-        <p>
-            Installing the LAMP stack on <strong><?= htmlspecialchars($server->name) ?></strong>
-            (<code><?= htmlspecialchars($server->ip_address) ?></code><?php if ($server_ipv6 !== ''): ?>,
-            <code><?= htmlspecialchars($server_ipv6) ?></code><?php endif; ?>). This takes a few minutes.
-        </p>
-    </div>
+        }';
+include APPPATH . 'modules/wizard/views/open.php';
+?>
 
     <pre id="log-pre">Connecting…</pre>
     <div id="status-msg"></div>
 
     <div id="next-panel" style="display:none">
-        <div class="steps" style="margin-bottom:1.25rem">
-            <div class="step-dot completed"></div>
-            <div class="step-dot completed"></div>
-            <div class="step-dot completed"></div>
-            <div class="step-dot completed"></div>
-            <div class="step-dot completed"></div>
-            <div class="step-dot completed"></div>
-            <div class="step-dot active"></div>
-            <div class="step-dot"></div>
-            <div class="step-dot"></div>
-        </div>
+        <?= wizard_step_dots(wizard_step_classes(8, 5)) ?>
         <a id="next-btn" href="customer-onboarding/dns_ssl" class="btn-primary">
             Configure DNS &amp; SSL &#10148;
         </a>
     </div>
 
-    <p style="text-align:center;margin-top:1.25rem;font-size:.8rem;color:#9ca3af">
+    <p class="onboarding-footer-note">
         Step 5 of 8 &mdash;
-        <a href="customer" style="color:#9ca3af">Skip to Dashboard</a>
+        <a href="customer">Skip to Dashboard</a>
     </p>
 </div>
 

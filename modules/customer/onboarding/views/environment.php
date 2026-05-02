@@ -1,12 +1,11 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <base href="<?= BASE_URL ?>">
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>First Environment — Provision Setup</title>
-    <link rel="stylesheet" href="customer-onboarding_module/css/onboarding.css">
-    <style>
+<?php
+$wizard_title      = 'First Environment — Provision Setup';
+$wizard_css        = 'customer-onboarding_module/css/onboarding.css';
+$wizard_heading    = '&#9670; Your First Environment';
+$wizard_subheading = 'An environment defines your app\'s runtime and infrastructure. Source code and git details are set per deployment.';
+$wizard_card_class = '';
+$wizard_card_style = 'max-width:520px';
+$wizard_css_inline = '
         .form-row   { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
         .form-hint  { font-size: 0.78rem; color: #9ca3af; margin-top: 0.25rem; display: block; }
         .svc-grid   { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; margin-top: .35rem; }
@@ -14,16 +13,9 @@
                       cursor: pointer; padding: .45rem .6rem; border: 1px solid #e5e7eb;
                       border-radius: .375rem; user-select: none; }
         .svc-label input { margin: 0; }
-        .svc-label:has(input:checked) { border-color: #6366f1; background: #f5f3ff; }
-    </style>
-</head>
-<body>
-
-<div class="onboarding-card" style="max-width:520px">
-    <div class="onboarding-header">
-        <h1>&#9670; Your First Environment</h1>
-        <p>An environment defines your app's runtime and infrastructure. Source code and git details are set per deployment.</p>
-    </div>
+        .svc-label:has(input:checked) { border-color: #6366f1; background: #f5f3ff; }';
+include APPPATH . 'modules/wizard/views/open.php';
+?>
 
     <?= validation_errors('<div class="error-message">', '</div>') ?>
 
@@ -135,17 +127,7 @@
         </div>
     </details>
 
-    <div class="steps">
-        <div class="step-dot completed"></div>
-        <div class="step-dot active"></div>
-        <div class="step-dot"></div>
-        <div class="step-dot"></div>
-        <div class="step-dot"></div>
-        <div class="step-dot"></div>
-        <div class="step-dot"></div>
-        <div class="step-dot"></div>
-        <div class="step-dot"></div>
-    </div>
+    <?= wizard_step_dots(wizard_step_classes(8, 2)) ?>
 
     <button type="submit" class="btn-primary">
         <div class="spinner" style="display:none"></div>
@@ -153,11 +135,10 @@
     </button>
     <?= form_close() ?>
 
-    <p style="text-align:center;margin-top:1.25rem;font-size:0.8rem;color:#9ca3af">
-        Step 2 of 8 &mdash; <a href="customer-onboarding/ssh_key" style="color:#9ca3af">&#8592; Back</a>
-    </p>
-</div>
-
-<script src="customer-onboarding_module/js/onboarding.js"></script>
-</body>
-</html>
+<?php
+$wizard_step_num   = 2;
+$wizard_step_total = 8;
+$wizard_back_url   = 'customer-onboarding/ssh_key';
+$wizard_back_text  = '← Back';
+$wizard_js         = 'customer-onboarding_module/js/onboarding.js';
+include APPPATH . 'modules/wizard/views/close.php';

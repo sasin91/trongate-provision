@@ -48,16 +48,13 @@ $copyable_value = static function (string $value): void {
     </span>
     <?php
 };
-?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <base href="<?= BASE_URL ?>">
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DNS &amp; SSL — Provision Setup</title>
-    <link rel="stylesheet" href="customer-onboarding_module/css/onboarding.css">
-    <style>
+
+$wizard_title      = 'DNS &amp; SSL — Provision Setup';
+$wizard_css        = 'customer-onboarding_module/css/onboarding.css';
+$wizard_heading    = '&#128274; DNS &amp; SSL';
+$wizard_subheading = 'Point your domain at the provisioned server, then optionally run Let\'s Encrypt before registering the deployment.';
+$wizard_card_class = 'onboarding-card--large';
+$wizard_css_inline = '
         #ssl-log-panel {
             display: none;
             margin: 1rem 0;
@@ -65,7 +62,7 @@ $copyable_value = static function (string $value): void {
         #ssl-log {
             background: #0f172a;
             color: #e2e8f0;
-            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+            font-family: \'SFMono-Regular\', Consolas, \'Liberation Mono\', Menlo, monospace;
             font-size: .775rem;
             line-height: 1.6;
             padding: 1rem 1.125rem;
@@ -81,16 +78,9 @@ $copyable_value = static function (string $value): void {
             text-align: center;
             color: var(--text-muted);
             min-height: 1.25rem;
-        }
-    </style>
-</head>
-<body>
-
-<div class="onboarding-card onboarding-card--large">
-    <div class="onboarding-header">
-        <h1>&#128274; DNS &amp; SSL</h1>
-        <p>Point your domain at the provisioned server, then optionally run Let's Encrypt before registering the deployment.</p>
-    </div>
+        }';
+include APPPATH . 'modules/wizard/views/open.php';
+?>
 
     <?= validation_errors('<div class="error-message">', '</div>') ?>
 
@@ -180,16 +170,7 @@ $copyable_value = static function (string $value): void {
         <?php endif; ?>
     <?php endif; ?>
 
-    <div class="steps steps--compact">
-        <div class="step-dot completed"></div>
-        <div class="step-dot completed"></div>
-        <div class="step-dot completed"></div>
-        <div class="step-dot completed"></div>
-        <div class="step-dot completed"></div>
-        <div class="step-dot completed"></div>
-        <div class="step-dot active"></div>
-        <div class="step-dot"></div>
-    </div>
+    <?= wizard_step_dots(wizard_step_classes(8, 6), 'steps steps--compact') ?>
 
     <?php if ($domain !== ''): ?>
         <button type="button" id="enable-ssl-btn" class="btn-primary" data-stream-url="<?= htmlspecialchars($ssl_stream_url) ?>" <?= $can_enable_ssl ? '' : 'disabled' ?>>

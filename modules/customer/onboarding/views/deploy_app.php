@@ -1,16 +1,16 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <base href="<?= BASE_URL ?>">
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Deploying App — Provision Setup</title>
-    <link rel="stylesheet" href="customer-onboarding_module/css/onboarding.css">
-    <style>
+<?php
+$wizard_title           = 'Deploying App — Provision Setup';
+$wizard_css             = 'customer-onboarding_module/css/onboarding.css';
+$wizard_heading         = '&#10148; Deploying App';
+$wizard_subheading_html = 'Running deployment #' . (int) $deployment->id . ' on'
+    . ' <strong>' . htmlspecialchars($deployment->server_name) . '</strong>.';
+$wizard_card_class = '';
+$wizard_card_style = 'max-width:560px';
+$wizard_css_inline = '
         #log-pre {
             background: #0f172a;
             color: #e2e8f0;
-            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+            font-family: \'SFMono-Regular\', Consolas, \'Liberation Mono\', Menlo, monospace;
             font-size: .775rem;
             line-height: 1.6;
             padding: 1rem 1.125rem;
@@ -27,17 +27,9 @@
             color: var(--text-muted);
             min-height: 1.25rem;
             margin-bottom: .75rem;
-        }
-    </style>
-</head>
-<body>
-
-<div class="onboarding-card" style="max-width:560px">
-    <div class="onboarding-header">
-        <h1>&#10148; Deploying App</h1>
-        <p>Running deployment #<?= (int) $deployment->id ?> on
-           <strong><?= htmlspecialchars($deployment->server_name) ?></strong>.</p>
-    </div>
+        }';
+include APPPATH . 'modules/wizard/views/open.php';
+?>
 
     <?php if (!empty($_SESSION['flash_success'])): ?>
         <div class="success-message"><?= htmlspecialchars($_SESSION['flash_success']) ?></div>
@@ -48,16 +40,7 @@
     <div id="status-msg"></div>
 
     <div id="finish-panel" style="display:none">
-        <div class="steps" style="margin-bottom:1.25rem">
-            <div class="step-dot completed"></div>
-            <div class="step-dot completed"></div>
-            <div class="step-dot completed"></div>
-            <div class="step-dot completed"></div>
-            <div class="step-dot completed"></div>
-            <div class="step-dot completed"></div>
-            <div class="step-dot completed"></div>
-            <div class="step-dot active"></div>
-        </div>
+        <?= wizard_step_dots(wizard_step_classes(8, 8)) ?>
         <a href="customer" class="btn-primary">Go to Dashboard &#10148;</a>
         <p style="text-align:center;margin-top:.75rem;margin-bottom:0">
             <a href="deployment/show/<?= (int) $deployment->id ?>"
@@ -65,9 +48,9 @@
         </p>
     </div>
 
-    <p style="text-align:center;margin-top:1.25rem;font-size:.8rem;color:#9ca3af">
+    <p class="onboarding-footer-note">
         Step 8 of 8 &mdash;
-        <a href="customer" style="color:#9ca3af">Go to Dashboard</a>
+        <a href="customer">Go to Dashboard</a>
     </p>
 </div>
 

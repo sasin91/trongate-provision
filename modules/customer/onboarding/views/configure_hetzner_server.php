@@ -1,21 +1,13 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <base href="<?= BASE_URL ?>">
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Configure Hetzner Server — Provision Setup</title>
-    <link rel="stylesheet" href="customer-onboarding_module/css/onboarding.css">
-</head>
-<body>
+<?php
+$wizard_title      = 'Configure Hetzner Server — Provision Setup';
+$wizard_css        = 'customer-onboarding_module/css/onboarding.css';
+$wizard_heading    = '&#9729; Configure Hetzner Server';
+$wizard_subheading = 'Select or create the server that Provision will prepare for this environment.';
+$wizard_card_class = 'onboarding-card--wide';
+include APPPATH . 'modules/wizard/views/open.php';
 
-<?php $active_tab = (post('provider', true) === 'hetzner_import') ? 'import' : 'new'; ?>
-
-<div class="onboarding-card onboarding-card--wide">
-    <div class="onboarding-header">
-        <h1>&#9729; Configure Hetzner Server</h1>
-        <p>Select or create the server that Provision will prepare for this environment.</p>
-    </div>
+$active_tab = (post('provider', true) === 'hetzner_import') ? 'import' : 'new';
+?>
 
     <?= validation_errors('<div class="error-message">', '</div>') ?>
 
@@ -85,16 +77,7 @@
             </div>
         </div>
 
-        <div class="steps">
-            <div class="step-dot completed"></div>
-            <div class="step-dot completed"></div>
-            <div class="step-dot completed"></div>
-            <div class="step-dot active"></div>
-            <div class="step-dot"></div>
-            <div class="step-dot"></div>
-            <div class="step-dot"></div>
-            <div class="step-dot"></div>
-        </div>
+        <?= wizard_step_dots(wizard_step_classes(8, 4)) ?>
 
         <button type="submit" class="btn-primary">
             <div class="spinner"></div>
@@ -140,13 +123,11 @@
     </div>
     <?php endif; ?>
 
-    <p class="onboarding-footer-note">
-        Step 4 of 8 &mdash;
-        <a href="customer-onboarding/server_hetzner">&#8592; Back</a>
-    </p>
-</div>
-
-<script src="js/trongate-mx.js"></script>
-<script src="customer-onboarding_module/js/onboarding.js"></script>
-</body>
-</html>
+<?php
+$wizard_step_num   = 4;
+$wizard_step_total = 8;
+$wizard_back_url   = 'customer-onboarding/server_hetzner';
+$wizard_back_text  = '← Back';
+$wizard_js_extra   = 'js/trongate-mx.js';
+$wizard_js         = 'customer-onboarding_module/js/onboarding.js';
+include APPPATH . 'modules/wizard/views/close.php';
