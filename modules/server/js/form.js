@@ -10,7 +10,7 @@ function syncShared() {
 function switchTab(tab) {
     ['hetzner', 'import', 'manual'].forEach(t => {
         const el = document.getElementById('tab-' + t);
-        if (el) el.style.display = (t === tab) ? '' : 'none';
+        if (el) el.classList.toggle('is-hidden', t !== tab);
     });
 
     document.querySelectorAll('.tab-btn').forEach(btn => {
