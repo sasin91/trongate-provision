@@ -14,8 +14,8 @@
             required><?= htmlspecialchars(post('public_key') ?: '') ?></textarea>
         <small class="key-validation" data-ssh-key-feedback></small>
         <small class="key-help">
-            Run <code class="inline-code">cat ~/.ssh/id_ed25519.pub</code>
-            to get it. No key yet?
+            Run <code class="inline-code" data-ssh-key-copy-command>cat ~/.ssh/id_ed25519.pub | pbcopy</code>
+            to copy it. No key yet?
             <code class="inline-code">ssh-keygen -t ed25519</code>
         </small>
     </div>

@@ -260,6 +260,43 @@
         });
     }
 
+    function getUserPlatform() {
+        const userAgentDataPlatform = navigator.userAgentData && navigator.userAgentData.platform;
+        return [
+            userAgentDataPlatform,
+            navigator.platform,
+            navigator.userAgent
+        ].filter(Boolean).join(' ').toLowerCase();
+    }
+
+    function getSshKeyCopyCommand() {
+        const platform = getUserPlatform();
+
+        if (platform.includes('win')) {
+            return 'cat .\\.ssh\\id_ed25519.pub | Set-Clipboard';
+        }
+        if (platform.includes('mac')) {
+            return 'cat ~/.ssh/id_ed25519.pub | pbcopy';
+        }
+        if (platform.includes('freebsd') || platform.includes('openbsd') || platform.includes('netbsd') || platform.includes('dragonfly') || platform.includes('bsd')) {
+            return 'cat ~/.ssh/id_ed25519.pub | xclip -selection clipboard';
+        }
+        if (platform.includes('wayland')) {
+            return 'cat ~/.ssh/id_ed25519.pub | wl-copy';
+        }
+        if (platform.includes('linux') || platform.includes('x11')) {
+            return 'cat ~/.ssh/id_ed25519.pub | xclip -selection clipboard';
+        }
+
+        return 'cat ~/.ssh/id_ed25519.pub | pbcopy';
+    }
+
+    function bindSshKeyCopyHints() {
+        document.querySelectorAll('[data-ssh-key-copy-command]').forEach(function (hint) {
+            hint.textContent = getSshKeyCopyCommand();
+        });
+    }
+
     function initOnboardingStreams() {
         document.querySelectorAll('[data-onboarding-stream]').forEach(function (root) {
             if (root.dataset.onboardingStream === 'provision') {
@@ -344,6 +381,7 @@
 
     document.addEventListener('DOMContentLoaded', function () {
         bindSshKeyValidation();
+        bindSshKeyCopyHints();
         bindSubmitLoaders();
         bindRegisterDeploymentInteractions();
         initOnboardingStreams();
