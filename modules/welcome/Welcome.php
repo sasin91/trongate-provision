@@ -11,12 +11,7 @@ class Welcome extends Trongate {
      * @return void
      */
     public function index(): void {
-        $data = [
-            'view_module' => 'welcome',
-            'view_file' => 'default_homepage'
-        ];
-
-        $this->templates->public($data);
+        $this->view('welcome');
     }
 
 }
