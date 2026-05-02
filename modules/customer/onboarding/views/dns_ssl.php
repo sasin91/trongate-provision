@@ -54,33 +54,34 @@ $wizard_css        = 'customer-onboarding_module/css/onboarding.css';
 $wizard_heading    = '&#128274; DNS &amp; SSL';
 $wizard_subheading = 'Point your domain at the provisioned server, then optionally run Let\'s Encrypt before registering the deployment.';
 $wizard_card_class = 'onboarding-card--large';
-$wizard_css_inline = '
-        #ssl-log-panel {
-            display: none;
-            margin: 1rem 0;
-        }
-        #ssl-log {
-            background: #0f172a;
-            color: #e2e8f0;
-            font-family: \'SFMono-Regular\', Consolas, \'Liberation Mono\', Menlo, monospace;
-            font-size: .775rem;
-            line-height: 1.6;
-            padding: 1rem 1.125rem;
-            border-radius: 8px;
-            max-height: 260px;
-            overflow-y: auto;
-            white-space: pre-wrap;
-            word-break: break-all;
-            margin: 0 0 .75rem;
-        }
-        #ssl-status-msg {
-            font-size: .825rem;
-            text-align: center;
-            color: var(--text-muted);
-            min-height: 1.25rem;
-        }';
 include APPPATH . 'modules/wizard/views/open.php';
 ?>
+<style>
+    #ssl-log-panel {
+        display: none;
+        margin: 1rem 0;
+    }
+    #ssl-log {
+        background: #0f172a;
+        color: #e2e8f0;
+        font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+        font-size: .775rem;
+        line-height: 1.6;
+        padding: 1rem 1.125rem;
+        border-radius: 8px;
+        max-height: 260px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+        word-break: break-all;
+        margin: 0 0 .75rem;
+    }
+    #ssl-status-msg {
+        font-size: .825rem;
+        text-align: center;
+        color: var(--text-muted);
+        min-height: 1.25rem;
+    }
+</style>
 
     <?= validation_errors('<div class="error-message">', '</div>') ?>
 

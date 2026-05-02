@@ -4,18 +4,19 @@ $wizard_css        = 'customer-onboarding_module/css/onboarding.css';
 $wizard_heading    = '&#9670; Your First Environment';
 $wizard_subheading = 'An environment defines your app\'s runtime and infrastructure. Source code and git details are set per deployment.';
 $wizard_card_class = '';
-$wizard_card_style = 'max-width:520px';
-$wizard_css_inline = '
-        .form-row   { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
-        .form-hint  { font-size: 0.78rem; color: #9ca3af; margin-top: 0.25rem; display: block; }
-        .svc-grid   { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; margin-top: .35rem; }
-        .svc-label  { display: flex; align-items: center; gap: .45rem; font-size: .875rem;
-                      cursor: pointer; padding: .45rem .6rem; border: 1px solid #e5e7eb;
-                      border-radius: .375rem; user-select: none; }
-        .svc-label input { margin: 0; }
-        .svc-label:has(input:checked) { border-color: #6366f1; background: #f5f3ff; }';
 include APPPATH . 'modules/wizard/views/open.php';
 ?>
+<style>
+    .form-row   { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+    .form-hint  { font-size: 0.78rem; color: #9ca3af; margin-top: 0.25rem; display: block; }
+    .svc-grid   { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; margin-top: .35rem; }
+    .svc-label  { display: flex; align-items: center; gap: .45rem; font-size: .875rem;
+                  cursor: pointer; padding: .45rem .6rem; border: 1px solid #e5e7eb;
+                  border-radius: .375rem; user-select: none; }
+    .svc-label input { margin: 0; }
+    .svc-label:has(input:checked) { border-color: #6366f1; background: #f5f3ff; }
+</style>
+<?php
 
     <?= validation_errors('<div class="error-message">', '</div>') ?>
 

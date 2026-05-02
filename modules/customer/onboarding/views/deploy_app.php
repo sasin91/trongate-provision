@@ -1,35 +1,34 @@
 <?php
-$wizard_title           = 'Deploying App — Provision Setup';
-$wizard_css             = 'customer-onboarding_module/css/onboarding.css';
-$wizard_heading         = '&#10148; Deploying App';
-$wizard_subheading_html = 'Running deployment #' . (int) $deployment->id . ' on'
-    . ' <strong>' . htmlspecialchars($deployment->server_name) . '</strong>.';
+$wizard_title      = 'Deploying App — Provision Setup';
+$wizard_css        = 'customer-onboarding_module/css/onboarding.css';
+$wizard_heading    = '&#10148; Deploying App';
+$wizard_subheading = 'Running deployment #' . (int) $deployment->id . ' on ' . $deployment->server_name . '.';
 $wizard_card_class = '';
-$wizard_card_style = 'max-width:560px';
-$wizard_css_inline = '
-        #log-pre {
-            background: #0f172a;
-            color: #e2e8f0;
-            font-family: \'SFMono-Regular\', Consolas, \'Liberation Mono\', Menlo, monospace;
-            font-size: .775rem;
-            line-height: 1.6;
-            padding: 1rem 1.125rem;
-            border-radius: 8px;
-            max-height: 300px;
-            overflow-y: auto;
-            white-space: pre-wrap;
-            word-break: break-all;
-            margin: 0 0 1rem;
-        }
-        #status-msg {
-            font-size: .825rem;
-            text-align: center;
-            color: var(--text-muted);
-            min-height: 1.25rem;
-            margin-bottom: .75rem;
-        }';
 include APPPATH . 'modules/wizard/views/open.php';
 ?>
+<style>
+    #log-pre {
+        background: #0f172a;
+        color: #e2e8f0;
+        font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+        font-size: .775rem;
+        line-height: 1.6;
+        padding: 1rem 1.125rem;
+        border-radius: 8px;
+        max-height: 300px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+        word-break: break-all;
+        margin: 0 0 1rem;
+    }
+    #status-msg {
+        font-size: .825rem;
+        text-align: center;
+        color: var(--text-muted);
+        min-height: 1.25rem;
+        margin-bottom: .75rem;
+    }
+</style>
 
     <?php if (!empty($_SESSION['flash_success'])): ?>
         <div class="success-message"><?= htmlspecialchars($_SESSION['flash_success']) ?></div>

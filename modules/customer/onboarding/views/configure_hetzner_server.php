@@ -128,6 +128,8 @@ $wizard_step_num   = 4;
 $wizard_step_total = 8;
 $wizard_back_url   = 'customer-onboarding/server_hetzner';
 $wizard_back_text  = '← Back';
-$wizard_js_extra   = 'js/trongate-mx.js';
 $wizard_js         = 'customer-onboarding_module/js/onboarding.js';
+?>
+<script src="js/trongate-mx.js"></script>
+<?php
 include APPPATH . 'modules/wizard/views/close.php';

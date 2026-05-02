@@ -1,40 +1,38 @@
 <?php
 $_server_ipv6 = trim((string) ($server->ipv6_address ?? ''));
-$_ipv6_part   = $_server_ipv6 !== ''
-    ? ', <code>' . htmlspecialchars($_server_ipv6) . '</code>'
-    : '';
+$_ipv6_part   = $_server_ipv6 !== '' ? ', ' . $_server_ipv6 : '';
 
-$wizard_title           = 'Provisioning Server — Provision Setup';
-$wizard_css             = 'customer-onboarding_module/css/onboarding.css';
-$wizard_heading         = '&#9881; Provisioning Server';
-$wizard_subheading_html = 'Installing the LAMP stack on <strong>' . htmlspecialchars($server->name) . '</strong>'
-    . ' (<code>' . htmlspecialchars($server->ip_address) . '</code>' . $_ipv6_part . '). This takes a few minutes.';
+$wizard_title      = 'Provisioning Server — Provision Setup';
+$wizard_css        = 'customer-onboarding_module/css/onboarding.css';
+$wizard_heading    = '&#9881; Provisioning Server';
+$wizard_subheading = 'Installing the LAMP stack on ' . $server->name
+    . ' (' . $server->ip_address . $_ipv6_part . '). This takes a few minutes.';
 $wizard_card_class = '';
-$wizard_card_style = 'max-width:560px';
-$wizard_css_inline = '
-        #log-pre {
-            background: #0f172a;
-            color: #e2e8f0;
-            font-family: \'SFMono-Regular\', Consolas, \'Liberation Mono\', Menlo, monospace;
-            font-size: .775rem;
-            line-height: 1.6;
-            padding: 1rem 1.125rem;
-            border-radius: 8px;
-            max-height: 300px;
-            overflow-y: auto;
-            white-space: pre-wrap;
-            word-break: break-all;
-            margin: 0 0 1rem;
-        }
-        #status-msg {
-            font-size: .825rem;
-            text-align: center;
-            color: var(--text-muted);
-            min-height: 1.25rem;
-            margin-bottom: .75rem;
-        }';
 include APPPATH . 'modules/wizard/views/open.php';
 ?>
+<style>
+    #log-pre {
+        background: #0f172a;
+        color: #e2e8f0;
+        font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+        font-size: .775rem;
+        line-height: 1.6;
+        padding: 1rem 1.125rem;
+        border-radius: 8px;
+        max-height: 300px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+        word-break: break-all;
+        margin: 0 0 1rem;
+    }
+    #status-msg {
+        font-size: .825rem;
+        text-align: center;
+        color: var(--text-muted);
+        min-height: 1.25rem;
+        margin-bottom: .75rem;
+    }
+</style>
 
     <pre id="log-pre">Connecting…</pre>
     <div id="status-msg"></div>
