@@ -795,8 +795,8 @@ class Onboarding extends Trongate
     $this->model->mark_onboarded((int) $customer->id);
     unset($_SESSION['onboarding_ssl_retryable_failure']);
 
-    header('Content-Type: application/json');
-    echo json_encode(['ok' => true]);
+    $this->module('http');
+    $this->http->json_response(['ok' => true]);
   }
 
   // ── Validation callbacks ────────────────────────────────────────

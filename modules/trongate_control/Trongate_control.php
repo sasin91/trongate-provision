@@ -84,8 +84,8 @@ class Trongate_control extends Trongate {
         $manifests = $this->scan_for_manifests();
         
         // Output as raw JSON
-        header('Content-Type: application/json');
-        echo json_encode($manifests, JSON_PRETTY_PRINT);
+        $this->module('http');
+        $this->http->json_response($manifests, 200, JSON_PRETTY_PRINT);
     }
     
     /**

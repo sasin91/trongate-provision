@@ -504,15 +504,16 @@ class Deployment extends Trongate
     $id = (int) segment(3);
     $customer = $this->_require_customer();
     $d = $this->model->get($id, (int) $customer->id);
+    $this->module('http');
     if ($d === false || $d->status !== "staged" || empty($d->release_path)) {
-      $this->_json_response(["ok" => false, "message" => "Only staged releases can be scanned for SQL files."], 422);
+      $this->http->json_response(["ok" => false, "message" => "Only staged releases can be scanned for SQL files."], 422);
       return;
     }
 
     $script = $this->_render_release_script("scan_release_sql", $d);
     $result = $this->_run_remote_script($d, $script);
     if ($result["exit_code"] !== 0) {
-      $this->_json_response([
+      $this->http->json_response([
         "ok" => false,
         "message" => "SQL scan failed: " . $this->_tail_text(trim($result["log"]), 800),
       ], 500);
@@ -536,7 +537,7 @@ class Deployment extends Trongate
       $files[] = ["path" => $path, "sql" => $sql];
     }
 
-    $this->_json_response(["ok" => true, "files" => $files]);
+    $this->http->json_response(["ok" => true, "files" => $files]);
   }
 
   function delete_release_sql(): void
@@ -544,12 +545,13 @@ class Deployment extends Trongate
     $id = (int) segment(3);
     $customer = $this->_require_customer();
     $d = $this->model->get($id, (int) $customer->id);
+    $this->module('http');
     if ($d === false || $d->status !== "staged" || empty($d->release_path)) {
-      $this->_json_response(["ok" => false, "message" => "Only staged releases can have SQL files deleted."], 422);
+      $this->http->json_response(["ok" => false, "message" => "Only staged releases can have SQL files deleted."], 422);
       return;
     }
 
-    $payload = $this->_json_request();
+    $payload = $this->http->json_request();
     $paths = is_array($payload["paths"] ?? null) ? $payload["paths"] : [];
     $clean_paths = [];
     foreach ($paths as $path) {
@@ -573,7 +575,7 @@ class Deployment extends Trongate
     }
 
     if (empty($clean_paths)) {
-      $this->_json_response(["ok" => false, "message" => "No valid SQL files were selected for deletion."], 422);
+      $this->http->json_response(["ok" => false, "message" => "No valid SQL files were selected for deletion."], 422);
       return;
     }
 
@@ -583,7 +585,7 @@ class Deployment extends Trongate
     ]);
     $result = $this->_run_remote_script($d, $script);
     if ($result["exit_code"] !== 0) {
-      $this->_json_response([
+      $this->http->json_response([
         "ok" => false,
         "message" => "SQL deletion failed: " . $this->_tail_text(trim($result["log"]), 800),
       ], 500);
@@ -594,7 +596,7 @@ class Deployment extends Trongate
     if (preg_match("/DELETED_SQL_COUNT\s*:\s*(\d+)/", $result["log"], $matches)) {
       $deleted = (int) $matches[1];
     }
-    $this->_json_response(["ok" => true, "deleted" => $deleted]);
+    $this->http->json_response(["ok" => true, "deleted" => $deleted]);
   }
 
   function promote_release_wizard(): void
@@ -602,7 +604,8 @@ class Deployment extends Trongate
     $id = (int) segment(3);
     $customer = $this->_require_customer();
     $result = $this->_promote_release_result($id, (int) $customer->id);
-    $this->_json_response($result, $result["ok"] ? 200 : 422);
+    $this->module('http');
+    $this->http->json_response($result, $result["ok"] ? 200 : 422);
   }
 
   function demote_release(): void
@@ -853,20 +856,6 @@ class Deployment extends Trongate
   private function _tail_text(string $message, int $length): string
   {
     return strlen($message) > $length ? "..." . substr($message, -$length) : $message;
-  }
-
-  private function _json_request(): array
-  {
-    $raw = file_get_contents("php://input");
-    $decoded = json_decode((string) $raw, true);
-    return is_array($decoded) ? $decoded : [];
-  }
-
-  private function _json_response(array $payload, int $status = 200): void
-  {
-    http_response_code($status);
-    header("Content-Type: application/json");
-    echo json_encode($payload);
   }
 
   private function _release_path_from_log(string $log): ?string
