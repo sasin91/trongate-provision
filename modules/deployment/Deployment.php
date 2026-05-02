@@ -278,7 +278,7 @@ class Deployment extends Trongate
 
     $script = $this->_render_deploy_script($d);
 
-    // SCP zip if source is zip and file is present locally
+    // SCP zip if a zip_path is present (uploaded zip or provider-fetched zip)
     if (($d->source_type ?? "") === "zip" && empty($d->zip_path)) {
       $msg = "Deployment zip is missing from storage. Upload the zip again to retry.";
       $emit($msg);
@@ -1090,6 +1090,8 @@ class Deployment extends Trongate
 
   private function _fetch_zip_from_provider(string $repo_url, string $branch): string|false
   {
+    $this->_prune_zip_storage();
+
     $archive_url = $this->_get_provider_archive_url($repo_url, $branch);
     if ($archive_url === false) {
       return false;
@@ -1103,12 +1105,16 @@ class Deployment extends Trongate
       CURLOPT_TIMEOUT        => 60,
       CURLOPT_USERAGENT      => 'Provision-Deploy/1.0',
       CURLOPT_SSL_VERIFYPEER => true,
+      CURLOPT_SSL_VERIFYHOST => 2,
     ]);
     $data      = curl_exec($ch);
     $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
 
     if ($data === false || $http_code !== 200 || strlen($data) < 100) {
+      return false;
+    }
+    if (strncmp($data, "PK\x03\x04", 4) !== 0) {
       return false;
     }
 
