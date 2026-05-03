@@ -51,6 +51,46 @@ body {
   margin-top: .25rem;
 }
 
+.script-editor-panel {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+  margin: 1rem 0;
+  overflow: hidden;
+}
+
+.script-editor-header {
+  display: flex;
+  justify-content: space-between;
+  gap: .75rem;
+  padding: .875rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.script-editor-textarea {
+  width: 100%;
+  min-height: 420px;
+  resize: vertical;
+  border: 0;
+  border-radius: 0;
+  box-sizing: border-box;
+  padding: 1rem;
+  font-family: Consolas, "Liberation Mono", monospace;
+  font-size: .78rem;
+  line-height: 1.55;
+  color: #dbeafe;
+  background: #0f172a;
+  outline: none;
+}
+
+.script-editor-note {
+  padding: .75rem 1rem;
+  border-top: 1px solid var(--border);
+  color: #64748b;
+  font-size: .78rem;
+  line-height: 1.5;
+}
+
 .form-actions {
   display: flex;
   gap: .75rem;

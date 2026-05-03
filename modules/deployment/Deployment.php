@@ -78,9 +78,12 @@ class Deployment extends Trongate
         } else {
           $zip_path = null;
           if ($source_type === "zip") {
-            $zip_path = $this->_store_zip();
+            $zip_error = "";
+            $zip_path = $this->_store_zip($zip_error);
             if ($zip_path === false) {
-              $_SESSION["flash_error"] = "Zip upload failed or missing.";
+              $zip_error = $zip_error ?: "Zip upload failed or missing.";
+              error_log("[provision] " . $zip_error);
+              $_SESSION["flash_error"] = $zip_error;
               goto render_create;
             }
           } elseif ($source_type === "git") {
@@ -92,11 +95,22 @@ class Deployment extends Trongate
             ) ?: null;
           }
 
+          $selected_script = false;
+          $selected_script_id = (int) post("custom_script_id");
+          if ($selected_script_id > 0) {
+            $this->module("script");
+            $selected_script = $this->script->model->get($selected_script_id, (int) $customer->id);
+            if ($selected_script === false || $selected_script->type !== "deploy") {
+              $selected_script = false;
+              $selected_script_id = 0;
+            }
+          }
+
           $id = $this->model->create([
             "server_id" => $server_id,
             "environment_id" => $environment_id,
             "customer_id" => (int) $customer->id,
-            "script_id" => null,
+            "script_id" => $selected_script !== false ? $selected_script_id : null,
             "source_type" => $source_type,
             "repo_url" =>
               $source_type === "git" ? post("repo_url", true) : null,
@@ -105,6 +119,35 @@ class Deployment extends Trongate
             "status" => "script_ready",
           ]);
 
+          $custom_script_id = $selected_script !== false ? $selected_script_id : null;
+          $default_script = $this->_default_deploy_script_template();
+          $base_script = $selected_script !== false ? (string) $selected_script->body : $default_script;
+          $submitted_script = (string) (post("deploy_script_body") ?: "");
+          if (
+            trim($submitted_script) !== "" &&
+            $this->_normalize_script_body($submitted_script) !== $this->_normalize_script_body($base_script)
+          ) {
+            $this->module("script");
+            $custom_script_id = $this->script->model->create([
+              "customer_id" => (int) $customer->id,
+              "name" => "Deployment {$id} custom deploy script",
+              "description" => "Created from deployment wizard edits.",
+              "type" => "deploy",
+              "body" => $submitted_script,
+            ]);
+
+            if ($custom_script_id !== false) {
+              $this->model->assign_script((int) $id, (int) $customer->id, (int) $custom_script_id);
+              $this->_emit("ScriptCreated", "script", (int) $custom_script_id, [
+                "name" => "Deployment {$id} custom deploy script",
+                "type" => "deploy",
+              ]);
+              $this->_emit("DeploymentScriptChanged", "deployment", (int) $id, [
+                "script_id" => (int) $custom_script_id,
+              ]);
+            }
+          }
+
           $this->_emit("DeploymentCreated", "deployment", (int) $id, [
             "server_id" => $server_id,
             "environment_id" => $environment_id,
@@ -112,7 +155,9 @@ class Deployment extends Trongate
             "status" => "script_ready",
           ]);
           $_SESSION["flash_success"] =
-            "Deployment created. Staging will start automatically.";
+            $custom_script_id
+              ? "Deployment created with custom deploy script. Staging will start automatically."
+              : "Deployment created. Staging will start automatically.";
           redirect("deployment/create/" . $id);
           return;
         }
@@ -133,6 +178,17 @@ class Deployment extends Trongate
 
     $preselected_server = (int) ($_GET["server"] ?? 0);
     $preselected_env = (int) ($_GET["env"] ?? 0);
+    $this->module("script");
+    $deploy_scripts = $this->script->model->by_type((int) $customer->id, "deploy");
+
+    $preselected_script = false;
+    $preselected_script_id = (int) (post("custom_script_id") ?: ($_GET["script"] ?? 0));
+    if ($preselected_script_id > 0) {
+      $preselected_script = $this->script->model->get($preselected_script_id, (int) $customer->id);
+      if ($preselected_script === false || $preselected_script->type !== "deploy") {
+        $preselected_script = false;
+      }
+    }
 
     $data = [
       "view_module" => "deployment",
@@ -147,6 +203,8 @@ class Deployment extends Trongate
       "deployment" => $wizard_deployment,
       "preselected_server" => $preselected_server,
       "preselected_env" => $preselected_env,
+      "preselected_script" => $preselected_script,
+      "deploy_scripts" => $deploy_scripts,
     ];
 
     $this->view("create", $data);
@@ -162,7 +220,7 @@ class Deployment extends Trongate
     }
 
     $script = $this->_render_deploy_script($deployment);
-    $display_script = $this->_redact_deploy_script($script);
+    $display_script = $this->_redact_deploy_script($script, $deployment);
 
     $this->module("environment-services");
     $services = $this->services->model->by_environment(
@@ -180,6 +238,9 @@ class Deployment extends Trongate
       5,
     );
 
+    $this->module("script");
+    $deploy_scripts = $this->script->model->by_type((int) $customer->id, "deploy");
+
     $data = [
       "view_module" => "deployment",
       "view_file" => "show",
@@ -187,6 +248,7 @@ class Deployment extends Trongate
       "current_email" => $customer->email,
       "deployment" => $deployment,
       "deploy_script" => $display_script,
+      "deploy_scripts" => $deploy_scripts,
       "services" => $services,
       "latest_health" => $latest_health,
       "recent_events" => $recent_events,
@@ -430,9 +492,8 @@ class Deployment extends Trongate
     $script_id_raw = (int) post("script_id");
     if ($script_id_raw > 0) {
       $this->module("script");
-      if (
-        $this->script->model->get($script_id_raw, (int) $customer->id) === false
-      ) {
+      $script = $this->script->model->get($script_id_raw, (int) $customer->id);
+      if ($script === false || $script->type !== "deploy") {
         $script_id_raw = 0;
       }
     }
@@ -448,6 +509,51 @@ class Deployment extends Trongate
       $script_id_raw > 0
         ? "Custom script assigned."
         : "Reverted to default generated script.";
+    redirect("deployment/show/" . $id);
+  }
+
+  function reupload_zip(): void
+  {
+    $id = (int) segment(3);
+    $customer = $this->_require_customer();
+    $d = $this->model->get($id, (int) $customer->id);
+    if ($d === false) {
+      redirect("deployment");
+      return;
+    }
+
+    if (($d->source_type ?? "") !== "zip") {
+      $_SESSION["flash_error"] = "Only zip deployments can have their zip file replaced.";
+      redirect("deployment/show/" . $id);
+      return;
+    }
+
+    if ($d->status === "running") {
+      $_SESSION["flash_error"] = "Cannot replace the zip while deployment is running.";
+      redirect("deployment/show/" . $id);
+      return;
+    }
+
+    $zip_error = "";
+    $zip_path = $this->_store_zip($zip_error);
+    if ($zip_path === false) {
+      $zip_error = $zip_error ?: "Zip upload failed or missing.";
+      error_log("[provision] " . $zip_error);
+      $_SESSION["flash_error"] = $zip_error;
+      redirect("deployment/show/" . $id);
+      return;
+    }
+
+    $old_path = (string) ($d->zip_path ?? "");
+    $this->model->set_zip_path($id, (int) $customer->id, $zip_path);
+    if ($old_path !== "" && $old_path !== $zip_path && file_exists($old_path)) {
+      @unlink($old_path);
+    }
+
+    $this->_emit("DeploymentZipReuploaded", "deployment", $id, [
+      "zip_path" => basename($zip_path),
+    ]);
+    $_SESSION["flash_success"] = "Deployment zip replaced. You can deploy again.";
     redirect("deployment/show/" . $id);
   }
 
@@ -728,6 +834,14 @@ class Deployment extends Trongate
         $this->environment->model->decrypt_blob($d->env_variables_enc) ?: [];
     }
 
+    if (($d->script_type ?? "") === "deploy" && trim((string) ($d->script_body ?? "")) !== "") {
+      $this->module("script");
+      return $this->script->model->interpolate(
+        (string) $d->script_body,
+        $this->_deploy_script_vars($d, $env_vars),
+      );
+    }
+
     return (string) $this->view(
       "scripts/deploy_script",
       [
@@ -737,6 +851,88 @@ class Deployment extends Trongate
       ],
       true,
     );
+  }
+
+  private function _deploy_script_vars(object $d, array $env_vars): array
+  {
+    $source = $d->source_type ?? "git";
+    if ($source === "git" && !empty($d->zip_path)) {
+      $source = "zip";
+    }
+
+    $webroot = (string) ($d->web_root ?: "/var/www/html");
+    $domain = (string) ($d->domain ?? "");
+    $db = (string) ($d->db_name ?? "");
+    $release_path = "/var/www/releases/deployment_" . (int) $d->id . "_" . date("YmdHis");
+
+    $vars = [
+      "{{PHP_VERSION}}" => (string) ($d->php_version ?? ""),
+      "{{REPO_URL}}" => (string) ($d->repo_url ?? ""),
+      "{{BRANCH}}" => (string) ($d->branch ?? "main"),
+      "{{WEB_ROOT}}" => $webroot,
+      "{{DOMAIN}}" => $domain,
+      "{{DB_NAME}}" => $db,
+      "{{SERVER_IP}}" => (string) ($d->ip_address ?? ""),
+      "{{SERVER_NAME}}" => (string) ($d->server_name ?? ""),
+      "{{ENV_NAME}}" => (string) ($d->env_name ?? ""),
+      "{{ENV_VARS}}" => $this->_render_env_vars_block($env_vars),
+      "{{RELEASE_PATH}}" => $release_path,
+      "{{SOURCE_TYPE}}" => $source,
+      "{{VHOST_BLOCK}}" => $domain !== ""
+        ? $this->_render_deploy_script_partial("_vhost", [
+          "domain" => $domain,
+          "webroot" => $webroot,
+        ])
+        : "# (no domain configured)",
+      "{{CONFIG_PATCH_BLOCK}}" => $this->_render_deploy_script_partial("_config_patch", [
+        "deployment" => $d,
+        "release_path" => $release_path,
+        "db" => $db,
+        "env_vars" => $env_vars,
+      ]),
+    ];
+
+    foreach ($env_vars as $key => $value) {
+      $safe_key = preg_replace("/[^A-Z0-9_]/", "_", strtoupper((string) $key));
+      if ($safe_key === "") {
+        continue;
+      }
+      $vars["{{{$safe_key}}}"] = (string) $value;
+    }
+
+    return $vars;
+  }
+
+  private function _render_deploy_script_partial(string $script, array $data): string
+  {
+    return trim((string) $this->view(
+      "scripts/" . $script,
+      array_merge(["view_module" => "deployment"], $data),
+      true,
+    ));
+  }
+
+  private function _render_env_vars_block(array $env_vars): string
+  {
+    return (string) $this->view(
+      "scripts/_env_vars",
+      [
+        "view_module" => "deployment",
+        "env_vars" => $env_vars,
+      ],
+      true,
+    );
+  }
+
+  private function _default_deploy_script_template(): string
+  {
+    $path = __DIR__ . "/assets/deploy_script_template.txt";
+    return is_file($path) ? (string) file_get_contents($path) : "";
+  }
+
+  private function _normalize_script_body(string $script): string
+  {
+    return trim(str_replace(["\r\n", "\r"], "\n", $script));
   }
 
   private function _render_release_script(string $script, object $d): string
@@ -813,7 +1009,7 @@ class Deployment extends Trongate
    * Removes secret values from the script preview shown in the browser.
    * The stream deploy path renders a fresh unredacted script server-side.
    */
-  private function _redact_deploy_script(string $script): string
+  private function _redact_deploy_script(string $script, ?object $d = null): string
   {
     $lines = preg_split("/\r\n|\n|\r/", $script);
     if ($lines === false) {
@@ -838,7 +1034,21 @@ class Deployment extends Trongate
       $redacted[] = $line ?? "";
     }
 
-    return implode("\n", $redacted);
+    $redacted_script = implode("\n", $redacted);
+
+    if ($d !== null && !empty($d->env_variables_enc)) {
+      $this->module("environment");
+      $env_vars = $this->environment->model->decrypt_blob($d->env_variables_enc) ?: [];
+      foreach ($env_vars as $key => $value) {
+        $value = (string) $value;
+        if ($value === "" || !$this->_is_sensitive_script_key(strtoupper((string) $key))) {
+          continue;
+        }
+        $redacted_script = str_replace($value, "[redacted]", $redacted_script);
+      }
+    }
+
+    return $redacted_script;
   }
 
   private function _is_sensitive_script_key(string $key): bool
@@ -887,36 +1097,66 @@ class Deployment extends Trongate
     return (int) $rows[0]->server_id === $server_id;
   }
 
-  private function _store_zip(): string|false
+  private function _store_zip(?string &$error = null): string|false
   {
     $this->_prune_zip_storage();
 
+    if (!isset($_FILES["zip_file"])) {
+      $error = "Zip upload failed: no file was received. Check that the form is multipart and the server allows file uploads.";
+      return false;
+    }
+
+    $upload_error = (int) ($_FILES["zip_file"]["error"] ?? UPLOAD_ERR_NO_FILE);
+    if ($upload_error !== UPLOAD_ERR_OK) {
+      $error = $this->_zip_upload_error_message($upload_error);
+      return false;
+    }
+
     if (
       empty($_FILES["zip_file"]["tmp_name"]) ||
-      $_FILES["zip_file"]["error"] !== UPLOAD_ERR_OK
+      !is_uploaded_file($_FILES["zip_file"]["tmp_name"])
     ) {
+      $error = "Zip upload failed: PHP did not provide a valid uploaded temporary file.";
       return false;
     }
     if (
       strtolower(pathinfo($_FILES["zip_file"]["name"], PATHINFO_EXTENSION)) !==
       "zip"
     ) {
+      $error = "Zip upload failed: the selected file must have a .zip extension.";
       return false;
     }
     $hash = hash_file("sha256", $_FILES["zip_file"]["tmp_name"]);
     if ($hash === false) {
+      $error = "Zip upload failed: could not read the uploaded temporary file.";
       return false;
     }
     $this->module("storage");
     $dir = $this->storage->ensure_dir("deploy_zips");
     if ($dir === false) {
+      $error = "Zip upload failed: could not create the deploy_zips storage directory.";
       return false;
     }
     $dest = $dir . DIRECTORY_SEPARATOR . "provision_deploy_" . $hash . ".zip";
     if (!move_uploaded_file($_FILES["zip_file"]["tmp_name"], $dest)) {
+      $error = "Zip upload failed: could not move the uploaded file into storage.";
       return false;
     }
     return $dest;
+  }
+
+  private function _zip_upload_error_message(int $code): string
+  {
+    return match ($code) {
+      UPLOAD_ERR_INI_SIZE => "Zip upload failed: the file exceeds upload_max_filesize (" . ini_get("upload_max_filesize") . ").",
+      UPLOAD_ERR_FORM_SIZE => "Zip upload failed: the file exceeds the form upload limit.",
+      UPLOAD_ERR_PARTIAL => "Zip upload failed: the file was only partially uploaded.",
+      UPLOAD_ERR_NO_FILE => "Zip upload failed: no zip file was selected.",
+      UPLOAD_ERR_NO_TMP_DIR => "Zip upload failed: PHP has no upload_tmp_dir.",
+      UPLOAD_ERR_CANT_WRITE => "Zip upload failed: PHP could not write the upload to disk.",
+      UPLOAD_ERR_EXTENSION => "Zip upload failed: a PHP extension stopped the upload.",
+      default => "Zip upload failed: PHP upload error {$code}.",
+    };
   }
 
   private function _prune_zip_storage(): void

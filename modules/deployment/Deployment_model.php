@@ -119,6 +119,13 @@ class Deployment_model extends Model {
         $this->db->update($id, ['release_path' => $release_path], 'deployment');
     }
 
+    function set_zip_path(int $id, int $customer_id, string $zip_path): void {
+        $this->db->query_bind(
+            "UPDATE deployment SET zip_path = :zip_path WHERE id = :id AND customer_id = :cid",
+            ['id' => $id, 'cid' => $customer_id, 'zip_path' => $zip_path]
+        );
+    }
+
     function create(array $data): int|false {
         return $this->db->insert($data, 'deployment');
     }

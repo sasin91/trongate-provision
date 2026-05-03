@@ -14,6 +14,9 @@ class Script_model extends Model {
         '{{SERVER_NAME}}' => 'Server display name',
         '{{ENV_NAME}}'    => 'Environment name',
         '{{ENV_VARS}}'    => 'Exported environment variables block',
+        '{{RELEASE_PATH}}'=> 'Generated staged release path',
+        '{{SOURCE_TYPE}}' => 'Deployment source type: git or zip',
+        '{{VARIABLE_NAME}}' => 'Any environment variable key, for example {{DB_USER}}; variables are also exported by {{ENV_VARS}}',
     ];
 
     public const LAMP_VARS = [
@@ -33,7 +36,7 @@ class Script_model extends Model {
 
     function by_type(int $customer_id, string $type): array {
         return $this->db->query_bind(
-            "SELECT id, name FROM script WHERE customer_id = :cid AND type = :type ORDER BY name",
+            "SELECT id, name, body FROM script WHERE customer_id = :cid AND type = :type ORDER BY name",
             ['cid' => $customer_id, 'type' => $type],
             'object'
         );

@@ -17,13 +17,16 @@
         <?php if ($deployment->status !== 'running'): ?>
             <button type="button" id="deploy-btn" class="btn btn-primary" data-stream-url="<?= BASE_URL ?>deployment/stream/<?= $deployment->id ?>" onclick="startDeploy(<?= $deployment->id ?>)">&#9654; Deploy</button>
         <?php endif; ?>
-        <?php $show_promote = $deployment->status === 'staged'; ?>
+        <?php $show_promote = $deployment->status === 'staged' && !empty($deployment->release_path); ?>
         <?= form_open('deployment/promote_release/' . $deployment->id, [
             'id' => 'promote-release-form',
             'style' => 'display:' . ($show_promote ? 'inline' : 'none') . ';margin:0'
         ]) ?>
             <button type="submit" class="btn btn-primary" onclick="return confirm('Promote this staged release to live?')">&#8679; Promote release</button>
         <?= form_close() ?>
+        <?php if ($deployment->status === 'success'): ?>
+            <button type="button" class="btn btn-secondary" disabled>Release live</button>
+        <?php endif; ?>
         <?php if ($deployment->status === 'success' && !empty($deployment->previous_release_path)): ?>
             <?= form_open('deployment/demote_release/' . $deployment->id, ['style' => 'display:inline;margin:0']) ?>
             <button type="submit" class="btn btn-secondary" onclick="return confirm('Demote this live release and restore the previous release?')">&#8634; Demote</button>
@@ -131,11 +134,65 @@
     <?php endif; ?>
 </div>
 
+<?php if (($deployment->source_type ?? '') === 'zip'): ?>
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">Application Zip</span>
+        <span style="font-size:.78rem;color:#64748b">
+            <?= !empty($deployment->zip_path) && file_exists($deployment->zip_path) ? 'zip available' : 'zip missing' ?>
+        </span>
+    </div>
+    <div class="card-body">
+        <?= form_open_upload('deployment/reupload_zip/' . $deployment->id, ['class' => 'zip-upload-form']) ?>
+            <div class="form-group" style="margin:0">
+                <label class="form-label" for="zip-file">Replace zip file</label>
+                <input type="file" name="zip_file" id="zip-file" accept=".zip" class="form-control" required>
+                <span class="form-hint">Upload a fresh application .zip when the original zip is missing or you want to retry with new files.</span>
+            </div>
+            <div class="actions-row">
+                <button type="submit" class="btn btn-primary btn-sm" <?= $deployment->status === 'running' ? 'disabled' : '' ?>>Upload Zip</button>
+            </div>
+        <?= form_close() ?>
+    </div>
+</div>
+<?php endif; ?>
+
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">Deploy Script</span>
+        <?php if (!empty($deployment->script_name)): ?>
+            <span style="font-size:.78rem;color:#64748b">Using <?= htmlspecialchars($deployment->script_name) ?></span>
+        <?php else: ?>
+            <span style="font-size:.78rem;color:#64748b">Using default generated script</span>
+        <?php endif; ?>
+    </div>
+    <div class="card-body">
+        <?= form_open('deployment/assign_script/' . $deployment->id, ['class' => 'script-select-form']) ?>
+            <div class="form-group" style="margin:0">
+                <label class="form-label" for="script-id">Custom script</label>
+                <select name="script_id" id="script-id" class="form-control">
+                    <option value="0">Default generated deploy script</option>
+                    <?php foreach (($deploy_scripts ?? []) as $script): ?>
+                        <option value="<?= (int) $script->id ?>" <?= (int) ($deployment->script_id ?? 0) === (int) $script->id ? 'selected' : '' ?>>
+                            <?= htmlspecialchars($script->name) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+                <span class="form-hint">Custom deploy scripts can use deployment placeholders and any environment variable as <code>{{VARIABLE_NAME}}</code>. Echo <code>RELEASE_PATH: {{RELEASE_PATH}}</code> and <code>SHA: ...</code> so Provision can track the staged release.</span>
+            </div>
+            <div class="actions-row">
+                <button type="submit" class="btn btn-primary btn-sm">Save Script Choice</button>
+                <a href="script/create?type=deploy" class="btn btn-secondary btn-sm">New Script</a>
+            </div>
+        <?= form_close() ?>
+    </div>
+</div>
+
 <div class="card">
     <div class="card-header">
         <div>
             <span class="card-title">Deployment Script Preview</span>
-            <span style="margin-left:.6rem;font-size:.78rem;color:#94a3b8">generated staged release script</span>
+            <span style="margin-left:.6rem;font-size:.78rem;color:#94a3b8"><?= !empty($deployment->script_name) ? 'custom staged release script' : 'generated staged release script' ?></span>
         </div>
         <div class="actions-row">
             <button onclick="copyScript('deploy-script')" class="btn btn-secondary btn-sm">Copy</button>

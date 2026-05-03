@@ -27,6 +27,20 @@
     display: none;
 }
 
+.script-select-form {
+    align-items: end;
+    display: grid;
+    gap: .75rem;
+    grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.zip-upload-form {
+    align-items: end;
+    display: grid;
+    gap: .75rem;
+    grid-template-columns: minmax(0, 1fr) auto;
+}
+
 .terminal-log {
     background: #0f172a;
     border-radius: 0 0 .5rem .5rem;
@@ -43,4 +57,12 @@
 .terminal-log-static {
     max-height: none;
     overflow-y: visible;
+}
+
+@media (max-width: 720px) {
+    .zip-upload-form,
+    .script-select-form {
+        align-items: stretch;
+        grid-template-columns: 1fr;
+    }
 }

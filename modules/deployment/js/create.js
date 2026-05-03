@@ -7,6 +7,40 @@ function toggleSource(type) {
     if (zip) zip.classList.toggle('is-hidden', type !== 'zip');
 }
 
+async function loadDeployScriptTemplate() {
+    const editor = document.getElementById('deploy-script-body');
+    if (!editor || editor.value.trim() !== '' || !editor.dataset.templateUrl) return;
+
+    try {
+        const response = await fetch(editor.dataset.templateUrl, {
+            credentials: 'same-origin',
+            headers: {'X-Requested-With': 'XMLHttpRequest'}
+        });
+        if (response.ok) {
+            editor.value = await response.text();
+        }
+    } catch (error) {
+        // The deployment can still be created; an empty editor just means default script.
+    }
+}
+
+function initCustomScriptPicker() {
+    const select = document.getElementById('custom-script-id');
+    const editor = document.getElementById('deploy-script-body');
+    if (!select || !editor) return;
+
+    select.addEventListener('change', () => {
+        const option = select.options[select.selectedIndex];
+        const template = option && option.dataset.templateId
+            ? document.getElementById(option.dataset.templateId)
+            : null;
+        editor.value = template ? (template.content.textContent || template.textContent || '') : '';
+        if (select.value === '') {
+            loadDeployScriptTemplate();
+        }
+    });
+}
+
 function applyEnvLock(sel) {
     const opt = sel.options[sel.selectedIndex];
     const locked = parseInt(opt.dataset.lockedServer || '0', 10);
@@ -253,6 +287,9 @@ function initWizard(card) {
 }
 
 document.addEventListener('DOMContentLoaded', function () {
+    loadDeployScriptTemplate();
+    initCustomScriptPicker();
+
     const envSelect = document.getElementById('env-select');
     if (envSelect) {
         envSelect.addEventListener('change', () => applyEnvLock(envSelect));

@@ -4,6 +4,9 @@
         <div class="page-title"><?= htmlspecialchars($script->name) ?></div>
     </div>
     <div class="actions-row">
+        <?php if ($script->type === 'deploy'): ?>
+            <a href="deployment/create?script=<?= (int) $script->id ?>" class="btn btn-primary">Create Deployment</a>
+        <?php endif; ?>
         <a href="script/edit/<?= $script->id ?>" class="btn btn-primary">Edit</a>
         <a href="script/delete/<?= $script->id ?>" class="btn btn-danger" onclick="return confirm('Delete this script? Deployments using it will fall back to the default.')">Delete</a>
     </div>
@@ -57,11 +60,14 @@
 
         <?php if ($script->type === 'deploy'): ?>
         <div class="card" style="margin-top:1rem">
-            <div class="card-header"><span class="card-title">Assign to Deployment</span></div>
+            <div class="card-header"><span class="card-title">Use for Deployment</span></div>
             <div class="card-body" style="font-size:.82rem;color:#64748b">
-                Go to a deployment and set <strong>"Custom Script"</strong> to this script to override the default generated script.
+                Create a staged deployment with this script preselected, or assign it to an existing deployment.
                 <br><br>
-                <a href="deployment" class="btn btn-secondary btn-sm" style="display:inline-flex">View Deployments</a>
+                <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+                    <a href="deployment/create?script=<?= (int) $script->id ?>" class="btn btn-primary btn-sm" style="display:inline-flex">Create Deployment</a>
+                    <a href="deployment" class="btn btn-secondary btn-sm" style="display:inline-flex">View Deployments</a>
+                </div>
             </div>
         </div>
         <?php endif; ?>
