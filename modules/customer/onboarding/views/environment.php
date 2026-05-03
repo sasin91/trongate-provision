@@ -44,7 +44,7 @@
     $control_class = 'form-input';
     $hint_color = '#9ca3af';
     $text_color = 'var(--text-main)';
-    include __DIR__ . '/../../environment/views/_setup_fields.php';
+    include __DIR__ . '/../../../environment/views/_setup_fields.php';
     ?>
 
     <?= wizard_step_dots(wizard_step_classes(8, 2)) ?>
