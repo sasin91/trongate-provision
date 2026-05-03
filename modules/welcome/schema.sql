@@ -1,39 +1,6 @@
 CREATE DATABASE IF NOT EXISTS provision CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE provision;
 
-CREATE TABLE IF NOT EXISTS trongate_user_levels (
-    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    level_name VARCHAR(100) NOT NULL
-);
-
-INSERT IGNORE INTO trongate_user_levels (id, level_name) VALUES
-    (1, 'admin'),
-    (2, 'customer');
-
-CREATE TABLE IF NOT EXISTS trongate_users (
-    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    code VARCHAR(32) NOT NULL,
-    user_level_id INT UNSIGNED NOT NULL DEFAULT 1
-);
-
-CREATE TABLE IF NOT EXISTS trongate_tokens (
-    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    user_id INT UNSIGNED NOT NULL,
-    token VARCHAR(64) NOT NULL,
-    expiry_date INT NOT NULL DEFAULT 0,
-    date_created INT NOT NULL DEFAULT 0
-);
-
-CREATE TABLE IF NOT EXISTS trongate_administrators (
-    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    trongate_user_id INT UNSIGNED NOT NULL,
-    username VARCHAR(100) NOT NULL,
-    password VARCHAR(255) NOT NULL,
-    first_name VARCHAR(100),
-    last_name VARCHAR(100),
-    email_address VARCHAR(255)
-);
-
 CREATE TABLE IF NOT EXISTS customer (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     trongate_user_id INT UNSIGNED NOT NULL,
