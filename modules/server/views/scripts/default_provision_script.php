@@ -3,6 +3,7 @@ set -euo pipefail
 
 PROVISION_USER="${PROVISION_USER:-provision}"
 RELEASES_DIR="${RELEASES_DIR:-/var/www/releases}"
+SHARED_DIR="${SHARED_DIR:-/var/www/shared}"
 LIVE_LINK="${LIVE_LINK:-/var/www/html}"
 DOMAIN="${DOMAIN:-}"
 DB_NAME="${DB_NAME:-}"
@@ -16,12 +17,19 @@ PACKAGES="apache2 php libapache2-mod-php php-mysql php-curl php-mbstring php-xml
 apt-get install -y -q $PACKAGES
 
 # ── Dedicated deploy user ─────────────────────────────────────────
-useradd -m -s /bin/bash "$PROVISION_USER" 2>/dev/null || true
+useradd -M -d /var/www/html -s /bin/bash "$PROVISION_USER" 2>/dev/null || true
 mkdir -p "/home/$PROVISION_USER/.ssh"
 cp /root/.ssh/authorized_keys "/home/$PROVISION_USER/.ssh/authorized_keys" 2>/dev/null || true
 chown -R "$PROVISION_USER:$PROVISION_USER" "/home/$PROVISION_USER/.ssh"
 chmod 700 "/home/$PROVISION_USER/.ssh"
 chmod 600 "/home/$PROVISION_USER/.ssh/authorized_keys" 2>/dev/null || true
+# Home dir is /var/www/html (a symlink), so sshd needs an explicit key path
+mkdir -p /etc/ssh/sshd_config.d
+cat > "/etc/ssh/sshd_config.d/10-${PROVISION_USER}.conf" << SSHDEOF
+Match User $PROVISION_USER
+    AuthorizedKeysFile /home/$PROVISION_USER/.ssh/authorized_keys
+SSHDEOF
+systemctl reload ssh 2>/dev/null || systemctl reload sshd 2>/dev/null || true
 
 cat > "/etc/sudoers.d/$PROVISION_USER" << SUDOEOF
 $PROVISION_USER ALL=(ALL) NOPASSWD: /usr/bin/apt-get *
@@ -32,8 +40,10 @@ $PROVISION_USER ALL=(ALL) NOPASSWD: /usr/bin/systemctl reload apache2
 $PROVISION_USER ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart apache2
 $PROVISION_USER ALL=(ALL) NOPASSWD: /usr/bin/mkdir -p /var/www, /usr/bin/mkdir -p /var/www/*
 $PROVISION_USER ALL=(ALL) NOPASSWD: /usr/bin/install -d -m 0755 -o $PROVISION_USER -g $PROVISION_USER /var/www/releases/*
+$PROVISION_USER ALL=(ALL) NOPASSWD: /usr/bin/install -d -m 2770 -o $PROVISION_USER -g www-data /var/www/shared
+$PROVISION_USER ALL=(ALL) NOPASSWD: /usr/bin/chmod 2770 /var/www/shared
 $PROVISION_USER ALL=(ALL) NOPASSWD: /usr/bin/mv -Tf /tmp/provision_promote_* /var/www/*, /usr/bin/mv -Tf /tmp/provision_demote_* /var/www/*
-$PROVISION_USER ALL=(ALL) NOPASSWD: /usr/bin/chgrp -R www-data /var/www, /usr/bin/chgrp -R www-data /var/www/*
+$PROVISION_USER ALL=(ALL) NOPASSWD: /usr/bin/chgrp -R www-data /var/www, /usr/bin/chgrp -R www-data /var/www/*, /usr/bin/chgrp www-data /var/www/shared/*
 $PROVISION_USER ALL=(ALL) NOPASSWD: /usr/bin/tee /etc/apache2/sites-available/*.conf
 $PROVISION_USER ALL=(ALL) NOPASSWD: /usr/bin/a2ensite *
 $PROVISION_USER ALL=(ALL) NOPASSWD: /usr/bin/a2dissite 000-default
@@ -49,6 +59,11 @@ chown "$PROVISION_USER":www-data /var/www
 chmod 2775 /var/www
 mkdir -p "$RELEASES_DIR"
 chmod 2775 "$RELEASES_DIR"
+
+# Shared runtime files that should persist across release directories.
+mkdir -p "$SHARED_DIR"
+chown "$PROVISION_USER":www-data "$SHARED_DIR"
+chmod 2770 "$SHARED_DIR"
 EMPTY_RELEASE="$RELEASES_DIR/.provision_empty"
 mkdir -p "$EMPTY_RELEASE"
 chown "$PROVISION_USER":www-data "$EMPTY_RELEASE"

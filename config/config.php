@@ -17,3 +17,7 @@ define('ENCRYPTION_KEY', getenv('PROVISION_ENCRYPTION_KEY') ?: 'ch4ng3-th1s-k3y-
 define('RUNNER_SSH_KEY', getenv('RUNNER_SSH_KEY') ?: '~/.ssh/id_ed25519');
 
 define('RUNNER_SCRIPT_TIMEOUT', 3600);
+
+// Persistent private storage for uploads fetched before deployment streaming.
+// In release-based installs this should live outside /var/www/releases.
+define('PROVISION_STORAGE_PATH', getenv('PROVISION_STORAGE_PATH') ?: '');

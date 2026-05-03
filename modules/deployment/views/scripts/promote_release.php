@@ -45,6 +45,12 @@ if [ -z "$TARGET_RELEASE" ] || [ ! -d "$TARGET_RELEASE" ]; then
     exit 1
 fi
 
+SHARED_ENV_FILE="/var/www/shared/.env"
+if [ -f "$SHARED_ENV_FILE" ]; then
+    ln -sfn "$SHARED_ENV_FILE" "$TARGET_RELEASE/.env"
+    echo "==> Linked release .env to $SHARED_ENV_FILE"
+fi
+
 WEB_PARENT=$(dirname "$LIVE_WEB_ROOT")
 run_sudo mkdir -p "$WEB_PARENT"
 

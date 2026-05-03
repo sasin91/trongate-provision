@@ -5,7 +5,23 @@ class Storage extends Trongate {
 
     public function __construct(?string $module_name = null) {
         parent::__construct($module_name);
-        $this->root = __DIR__;
+        $this->root = $this->resolve_root();
+    }
+
+    private function resolve_root(): string {
+        $configured = defined('PROVISION_STORAGE_PATH')
+            ? (string) PROVISION_STORAGE_PATH
+            : (string) (getenv('PROVISION_STORAGE_PATH') ?: '');
+        if (trim($configured) !== '') {
+            return rtrim($configured, DIRECTORY_SEPARATOR);
+        }
+
+        $dir = str_replace('\\', '/', __DIR__);
+        if (preg_match('#^(.+)/releases/[^/]+/modules/storage$#', $dir, $matches)) {
+            return $matches[1] . '/shared/storage';
+        }
+
+        return __DIR__;
     }
 
     /** Absolute path to a file/dir within this module's storage root. */
