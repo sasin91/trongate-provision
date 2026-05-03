@@ -84,8 +84,13 @@
                 method: 'POST',
                 credentials: 'same-origin',
                 headers: {'X-Requested-With': 'XMLHttpRequest'}
+            }).then(function (response) {
+                if (!response.ok) {
+                    throw new Error('Onboarding completion failed.');
+                }
+                window.location.href = '<?= BASE_URL ?>deployment/show/<?= (int) $deployment->id ?>';
             }).catch(function () {
-                msg.textContent = 'Release staged. Refresh once before opening the dashboard.';
+                msg.textContent = 'Release staged. Open the deployment page to update the database and promote it.';
             });
         } else {
             msg.textContent = '✗ Deployment failed — you can retry from the deployment page.';
