@@ -183,4 +183,4 @@
 </div>
 <?php endif; ?>
 
-<script src="server_module/js/form.js"></script>
+<script src="deployment-server_module/js/form.js"></script>

@@ -208,4 +208,4 @@
   </div>
 </div>
 
-<script src="server_module/js/show.js"></script>
+<script src="deployment-server_module/js/show.js"></script>
