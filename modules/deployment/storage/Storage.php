@@ -17,7 +17,7 @@ class Storage extends Trongate {
         }
 
         $dir = str_replace('\\', '/', __DIR__);
-        if (preg_match('#^(.+)/releases/[^/]+/modules/storage$#', $dir, $matches)) {
+        if (preg_match('#^(.+)/releases/[^/]+/modules/deployment/storage$#', $dir, $matches)) {
             return $matches[1] . '/shared/storage';
         }
 

@@ -79,7 +79,7 @@ abstract class Api_client {
 
 /**
  * Trongate module for outbound HTTP.
- * Load with $this->module('http-client') → $this->client
+ * Load via: require_once __DIR__ . '/http/client/Client.php'; $client = new Client();
  */
 class Client extends Trongate {
 
