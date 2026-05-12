@@ -43,7 +43,7 @@ class Environment extends Trongate {
                     redirect('environment/create');
                     return;
                 }
-                $this->module('deployment-environment-services');
+                $this->module('deployment-services');
                 $this->services->model->create_defaults_for_environment(
                     (int) $env_id,
                     (array) ($_POST['services'] ?? []),
@@ -80,7 +80,7 @@ class Environment extends Trongate {
         $this->module('deployment-server');
         $servers = $this->server->model->by_environment($id);
 
-        $this->module('deployment-environment-services');
+        $this->module('deployment-services');
         $services      = $this->services->model->by_environment($id);
         $type_defaults = $this->services->model->get_type_defaults();
 

@@ -131,7 +131,7 @@ class Onboarding extends Trongate
       return;
     }
 
-    $this->module('deployment-environment-services');
+    $this->module('deployment-services');
     $this->services->model->create_defaults_for_environment(
       (int) $env_id,
       (array) ($_POST['services'] ?? []),

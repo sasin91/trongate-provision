@@ -155,13 +155,13 @@ class Deployment extends Trongate
     $script = $this->_render_deploy_script($deployment);
     $display_script = $this->_redact_deploy_script($script, $deployment);
 
-    $this->module("deployment-environment-services");
+    $this->module("deployment-services");
     // TODO: remove after event/health modules are migrated off customer_id (Task 3)
     $services = $this->services->model->by_environment(
       (int) $deployment->env_id,
       (int) ($_SESSION['customer_id'] ?? 0),
     );
-    $this->module("deployment-server-health");
+    $this->module("deployment-health");
     $latest_health = $this->health->model->latest("deployment", $id);
 
     $this->module("deployment-event");
@@ -868,10 +868,10 @@ class Deployment extends Trongate
       $summary[$status]++;
     };
 
-    $this->module("deployment-server-health");
+    $this->module("deployment-health");
     $record($this->health->check_deployment_result($deployment_id, $customer_id));
 
-    $this->module("deployment-environment-services");
+    $this->module("deployment-services");
     $services = $this->services->model->by_environment($env_id, $customer_id);
     foreach ($services as $service) {
       $record($this->health->check_service_result((int) $service->id, $customer_id));
