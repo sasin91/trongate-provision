@@ -11,15 +11,15 @@ class Health extends Trongate
 
   function health(): void
   {
-    $customer = $this->_require_customer();
-    $overview = $this->model->latest_all((int) $customer->id);
-    $stats    = $this->model->stats((int) $customer->id);
+    $this->_require_auth();
+    $overview = $this->model->latest_all(1);
+    $stats    = $this->model->stats(1);
 
     $data = [
       'view_module'   => 'deployment/health',
       'view_file'     => 'health',
       'page_title'    => 'Health',
-      'current_email' => $customer->email,
+      'current_email' => defined('OUR_EMAIL_ADDRESS') ? OUR_EMAIL_ADDRESS : '',
       'overview'      => $overview,
       'stats'         => $stats,
     ];
@@ -32,7 +32,7 @@ class Health extends Trongate
   {
     $type      = segment(3);
     $target_id = (int) segment(4);
-    $customer  = $this->_require_customer();
+    $this->_require_auth();
     $this->validation->set_rules('dummy', 'dummy', 'max_length[1]');
     if ($this->validation->run() !== true) {
       redirect('server-health/health');
@@ -40,10 +40,10 @@ class Health extends Trongate
     }
 
     if ($type === 'deployment') {
-      $this->check_deployment_result($target_id, (int) $customer->id);
+      $this->check_deployment_result($target_id, 1);
       redirect('deployment/show/' . $target_id);
     } elseif ($type === 'service') {
-      $this->check_service_result($target_id, (int) $customer->id);
+      $this->check_service_result($target_id, 1);
       redirect('environment-services/show/' . $target_id);
     } else {
       redirect('server-health/health');
@@ -53,7 +53,7 @@ class Health extends Trongate
   function check_server(): void
   {
     $server_id = (int) segment(3);
-    $customer  = $this->_require_customer();
+    $this->_require_auth();
     $this->validation->set_rules('dummy', 'dummy', 'max_length[1]');
     if ($this->validation->run() !== true) {
       redirect('server/show/' . $server_id);
@@ -61,12 +61,12 @@ class Health extends Trongate
     }
 
     $this->module('deployment');
-    $deployments = $this->deployment->model->by_server($server_id, (int) $customer->id);
+    $deployments = $this->deployment->model->by_server($server_id);
 
     $saved_timeout = $this->probe_timeout;
     $this->probe_timeout = 2;
     foreach ($deployments as $d) {
-      $this->check_deployment_result((int) $d->id, (int) $customer->id);
+      $this->check_deployment_result((int) $d->id, 1);
     }
     $this->probe_timeout = $saved_timeout;
 
@@ -77,28 +77,26 @@ class Health extends Trongate
 
   function check_all(): void
   {
-    $customer = $this->_require_customer();
+    $this->_require_auth();
     $this->validation->set_rules('dummy', 'dummy', 'max_length[1]');
     if ($this->validation->run() !== true) {
       redirect('server-health/health');
       return;
     }
 
-    $cid = (int) $customer->id;
-
     $saved_timeout = $this->probe_timeout;
     $this->probe_timeout = 2;
 
     $this->module('deployment');
-    $deployments = array_slice($this->deployment->model->all($cid), 0, 10);
+    $deployments = array_slice($this->deployment->model->all(), 0, 10);
     foreach ($deployments as $d) {
-      $this->check_deployment_result((int) $d->id, $cid);
+      $this->check_deployment_result((int) $d->id, 1);
     }
 
     $this->module('deployment-services');
-    $services = array_slice($this->services->model->all($cid), 0, 10);
+    $services = array_slice($this->services->model->all(), 0, 10);
     foreach ($services as $s) {
-      $this->check_service_result((int) $s->id, $cid);
+      $this->check_service_result((int) $s->id, 1);
     }
 
     $this->probe_timeout = $saved_timeout;
@@ -281,10 +279,11 @@ class Health extends Trongate
     return ['status' => 'healthy', 'message' => "Port {$port} open", 'ms' => $ms];
   }
 
-  private function _require_customer(): object
+  private function _require_auth(): void
   {
-    $this->module('customer');
-    $this->customer->_require_onboarded();
-    return $this->customer->_require_customer();
+    $this->module('trongate_tokens');
+    if (!$this->trongate_tokens->_attempt_get_valid_token(1)) {
+      redirect('login');
+    }
   }
 }

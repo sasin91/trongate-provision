@@ -1,17 +1,14 @@
 <?php
 
-require_once __DIR__ . '/../customer/traits/Current_customer.php';
-
 class Provider_model extends Model {
-    use Current_customer;
 
     function has_hetzner(int $customer_id): bool {
-        $this->module('secrets');
+        $this->module('deployment-secrets');
         return $this->secrets->exists('customer', $customer_id, 'hetzner');
     }
 
     function get_hetzner(int $customer_id): array {
-        $this->module('secrets');
+        $this->module('deployment-secrets');
         return $this->secrets->get('customer', $customer_id, 'hetzner');
     }
 
@@ -22,7 +19,7 @@ class Provider_model extends Model {
         string $ssh_key_label,
         array $ssh_key_ids = []
     ): void {
-        $this->module('secrets');
+        $this->module('deployment-secrets');
         $this->secrets->save('customer', $customer_id, 'hetzner', [
             'token'         => $token,
             'ssh_key_id'    => $ssh_key_id,
@@ -32,7 +29,16 @@ class Provider_model extends Model {
     }
 
     function delete_hetzner(int $customer_id): void {
-        $this->module('secrets');
+        $this->module('deployment-secrets');
         $this->secrets->delete('customer', $customer_id, 'hetzner');
+    }
+
+    function get_user_ssh_public_key(): string {
+        $rows = $this->db->query_bind(
+            "SELECT ssh_public_key FROM customer WHERE id = 1 AND active = 1 LIMIT 1",
+            [],
+            'object'
+        );
+        return !empty($rows) ? (string) ($rows[0]->ssh_public_key ?? '') : '';
     }
 }

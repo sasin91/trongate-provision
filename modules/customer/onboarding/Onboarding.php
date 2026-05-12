@@ -338,7 +338,7 @@ class Onboarding extends Trongate
 
       $token = post('token', true);
 
-      $this->module('cloud');
+      $this->module('deployment-cloud');
       $h = $this->cloud->hetzner($token);
 
       $ssh_key_ids = [];
@@ -535,7 +535,7 @@ class Onboarding extends Trongate
     if (empty($creds['token'])) {
       throw new RuntimeException('Hetzner token not configured.');
     }
-    $this->module('cloud');
+    $this->module('deployment-cloud');
     return $this->cloud->hetzner($creds['token']);
   }
 
@@ -831,7 +831,7 @@ class Onboarding extends Trongate
   function validate_hetzner_token(string $token): bool|string
   {
     if (empty($token)) return 'API Token is required.';
-    $this->module('cloud');
+    $this->module('deployment-cloud');
     if (!$this->cloud->hetzner($token)->validate_credentials()) {
       return 'Invalid API token. Verify it has Read & Write access in your Hetzner project.';
     }

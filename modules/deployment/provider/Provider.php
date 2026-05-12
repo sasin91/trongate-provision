@@ -3,16 +3,16 @@
 class Provider extends Trongate {
 
     function index(): void {
-        $customer = $this->_require_customer();
+        $this->_require_auth();
 
-        $has_hetzner = $this->model->has_hetzner((int) $customer->id);
-        $hetzner     = $has_hetzner ? $this->model->get_hetzner((int) $customer->id) : [];
+        $has_hetzner = $this->model->has_hetzner(1);
+        $hetzner     = $has_hetzner ? $this->model->get_hetzner(1) : [];
 
         $data = [
             'view_module' => 'deployment/provider',
             'view_file'    => 'index',
             'page_title'   => 'Providers',
-            'current_email'=> $customer->email,
+            'current_email'=> defined('OUR_EMAIL_ADDRESS') ? OUR_EMAIL_ADDRESS : '',
             'has_hetzner'  => $has_hetzner,
             'hetzner'      => $hetzner,
         ];
@@ -22,13 +22,13 @@ class Provider extends Trongate {
     }
 
     function connect(): void {
-        $customer = $this->_require_customer();
+        $this->_require_auth();
 
         $data = [
             'view_module' => 'deployment/provider',
             'view_file'     => 'connect',
             'page_title'    => 'Connect Hetzner Cloud',
-            'current_email' => $customer->email,
+            'current_email' => defined('OUR_EMAIL_ADDRESS') ? OUR_EMAIL_ADDRESS : '',
             'form_location' => 'provider/submit_connect',
         ];
 
@@ -37,7 +37,7 @@ class Provider extends Trongate {
     }
 
     function submit_connect(): void {
-        $customer = $this->_require_customer();
+        $this->_require_auth();
 
         $this->validation->set_rules('token', 'API Token', 'required|callback_validate_hetzner_token');
 
@@ -48,7 +48,7 @@ class Provider extends Trongate {
 
         $token = post('token', true);
 
-        $this->module('cloud');
+        $this->module('deployment-cloud');
         $hetzner = $this->cloud->hetzner($token);
 
         $ssh_key_ids = [];
@@ -68,19 +68,21 @@ class Provider extends Trongate {
         $label = $runner_key['name'];
         $ssh_key_ids[] = $runner_key['id'];
 
-        if (!empty($customer->ssh_public_key)) {
-            $customer_label = 'provision-customer-' . substr(md5($customer->email), 0, 8);
-            $customer_key = $hetzner->ensure_ssh_key($customer_label, $customer->ssh_public_key);
+        $user_ssh_key = $this->model->get_user_ssh_public_key();
+        if (!empty($user_ssh_key)) {
+            $admin_email = defined('OUR_EMAIL_ADDRESS') ? OUR_EMAIL_ADDRESS : '';
+            $customer_label = 'provision-customer-' . substr(md5($admin_email), 0, 8);
+            $customer_key = $hetzner->ensure_ssh_key($customer_label, $user_ssh_key);
             $ssh_key_ids[] = $customer_key['id'];
         }
 
-        $this->model->save_hetzner((int) $customer->id, $token, $key_id, $label, $ssh_key_ids);
+        $this->model->save_hetzner(1, $token, $key_id, $label, $ssh_key_ids);
         $_SESSION['flash_success'] = 'Hetzner Cloud connected.' . ($key_id ? ' SSH key uploaded.' : '');
         redirect('provider');
     }
 
     function disconnect(): void {
-        $customer = $this->_require_customer();
+        $this->_require_auth();
 
         $this->validation->set_rules('dummy', 'dummy', 'max_length[1]');
         if ($this->validation->run() !== true) {
@@ -88,7 +90,7 @@ class Provider extends Trongate {
             return;
         }
 
-        $this->model->delete_hetzner((int) $customer->id);
+        $this->model->delete_hetzner(1);
         $_SESSION['flash_success'] = 'Hetzner Cloud disconnected.';
         redirect('provider');
     }
@@ -98,7 +100,7 @@ class Provider extends Trongate {
     function validate_hetzner_token(string $token): bool|string {
         if (empty($token)) return 'API Token is required.';
 
-        $this->module('cloud');
+        $this->module('deployment-cloud');
         $client = $this->cloud->hetzner($token);
 
         if (!$client->validate_credentials()) {
@@ -110,10 +112,11 @@ class Provider extends Trongate {
 
     // ── Auth ─────────────────────────────────────────────────────
 
-    private function _require_customer(): object {
-        $this->module('customer');
-        $this->customer->_require_onboarded();
-        return $this->customer->_require_customer();
+    private function _require_auth(): void {
+        $this->module('trongate_tokens');
+        if (!$this->trongate_tokens->_attempt_get_valid_token(1)) {
+            redirect('login');
+        }
     }
 
     private function _runner_public_key(): string {

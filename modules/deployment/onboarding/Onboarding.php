@@ -441,7 +441,7 @@ class Deployment_onboarding extends Trongate
         if (empty($creds['token'])) {
             throw new RuntimeException('Hetzner token not configured.');
         }
-        $this->module('cloud');
+        $this->module('deployment-cloud');
         return $this->cloud->hetzner($creds['token']);
     }
 
@@ -560,9 +560,7 @@ class Deployment_onboarding extends Trongate
 
     private function _get_current_customer_id(): int
     {
-        $this->module('customer');
-        $customer = $this->customer->model->_get_current_customer();
-        return $customer !== false ? (int) $customer->id : 0;
+        return 1;
     }
 
     // ── Wizard rendering ────────────────────────────────────────────

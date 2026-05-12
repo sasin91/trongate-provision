@@ -4,19 +4,19 @@ class Event extends Trongate {
 
     function timeline_for_deployment(): void {
         $id = (int) segment(3);
-        $customer = $this->_require_customer();
+        $this->_require_auth();
 
         $this->module('deployment');
-        $deployment = $this->deployment->model->get($id, (int) $customer->id);
+        $deployment = $this->deployment->model->get($id);
         if ($deployment === false) { redirect('deployment'); }
 
-        $events = $this->model->for_entity('deployment', $id, (int) $customer->id);
+        $events = $this->model->for_entity('deployment', $id, 1);
 
         $data = [
             'view_module'   => 'deployment/event',
             'view_file'     => 'deployment',
             'page_title'    => 'Timeline — Deployment #' . $id,
-            'current_email' => $customer->email,
+            'current_email' => defined('OUR_EMAIL_ADDRESS') ? OUR_EMAIL_ADDRESS : '',
             'deployment'    => $deployment,
             'events'        => $events,
         ];
@@ -26,18 +26,18 @@ class Event extends Trongate {
     }
 
     function feed(): void {
-        $customer = $this->_require_customer();
+        $this->_require_auth();
         $filter   = in_array($_GET['filter'] ?? '', ['deployment', 'server', 'service', 'environment', 'customer'])
             ? $_GET['filter']
             : '';
 
-        $events = $this->model->for_customer((int) $customer->id, 100, $filter);
+        $events = $this->model->for_customer(1, 100, $filter);
 
         $data = [
             'view_module'   => 'deployment/event',
             'view_file'     => 'feed',
             'page_title'    => 'Activity Feed',
-            'current_email' => $customer->email,
+            'current_email' => defined('OUR_EMAIL_ADDRESS') ? OUR_EMAIL_ADDRESS : '',
             'events'        => $events,
             'active_filter' => $filter,
         ];
@@ -111,9 +111,10 @@ class Event extends Trongate {
         };
     }
 
-    private function _require_customer(): object {
-        $this->module('customer');
-        $this->customer->_require_onboarded();
-        return $this->customer->_require_customer();
+    private function _require_auth(): void {
+        $this->module('trongate_tokens');
+        if (!$this->trongate_tokens->_attempt_get_valid_token(1)) {
+            redirect('login');
+        }
     }
 }
