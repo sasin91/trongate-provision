@@ -287,9 +287,6 @@ function initWizard(card) {
 }
 
 document.addEventListener('DOMContentLoaded', function () {
-    loadDeployScriptTemplate();
-    initCustomScriptPicker();
-
     const envSelect = document.getElementById('env-select');
     if (envSelect) {
         envSelect.addEventListener('change', () => applyEnvLock(envSelect));

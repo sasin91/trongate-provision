@@ -30,9 +30,6 @@
             <a href="deployment" class="<?= str_contains($_SERVER['REQUEST_URI'] ?? '', '/deployment') ? 'active' : '' ?>">
                 &#10148; Deployments
             </a>
-            <a href="script" class="<?= str_contains($_SERVER['REQUEST_URI'] ?? '', '/script') ? 'active' : '' ?>">
-                &#128196; Scripts
-            </a>
             <a href="provider" class="<?= str_contains($_SERVER['REQUEST_URI'] ?? '', '/provider') ? 'active' : '' ?>">
                 &#9729; Providers
             </a>

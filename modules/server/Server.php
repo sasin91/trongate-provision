@@ -1,7 +1,6 @@
 <?php
 
 require_once __DIR__ . "/../event/Emits_events.php";
-require_once __DIR__ . "/../script/Script_model.php";
 
 class Server extends Trongate
 {
@@ -342,14 +341,7 @@ class Server extends Trongate
       (int) $customer->id,
     );
 
-    $this->module("script");
-    $lamp_scripts = $this->script->model->scripts_for_server(
-      $id,
-      (int) $customer->id,
-    );
-    $latest = $this->script->model->latest_for_server($id, (int) $customer->id);
-    $lamp_script =
-      $latest !== false ? $latest->body : $this->_generate_lamp_script($server);
+    $lamp_script = $this->_generate_lamp_script($server);
 
     $data = [
       "view_module" => "server",
@@ -359,8 +351,6 @@ class Server extends Trongate
       "server" => $server,
       "deployments" => $deployments,
       "lamp_script" => $lamp_script,
-      "lamp_scripts" => $lamp_scripts,
-      "lamp_vars" => Script_model::LAMP_VARS,
       "additional_includes_top" => array_filter([
         "server_module/css/server.css",
         $server->status === 'pending' ? '<meta http-equiv="refresh" content="8">' : null,
@@ -369,35 +359,6 @@ class Server extends Trongate
 
     $this->module("templates");
     $this->templates->customer($data);
-  }
-
-  function save_lamp_script(): void
-  {
-    $id = (int) segment(3);
-    $customer = $this->_require_onboarded_customer();
-    $server = $this->model->get($id, (int) $customer->id);
-    if ($server === false) {
-      redirect("server");
-    }
-
-    $body = post("body");
-    if (empty(trim($body ?? ""))) {
-      $_SESSION["flash_error"] = "Script body cannot be empty.";
-      redirect("server/show/" . $id);
-      return;
-    }
-
-    $this->module("script");
-    $this->script->model->create([
-      "customer_id" => (int) $customer->id,
-      "server_id" => $id,
-      "name" => $server->name . " — LAMP — " . date("Y-m-d H:i"),
-      "type" => "lamp",
-      "body" => $body,
-    ]);
-
-    $_SESSION["flash_success"] = "LAMP script saved.";
-    redirect("server/show/" . $id);
   }
 
   function reboot(): void

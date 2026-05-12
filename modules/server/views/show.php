@@ -94,70 +94,19 @@
   <?php endif; ?>
 </div>
 
-<!-- LAMP Script Editor -->
-<form method="post" action="server/save_lamp_script/<?= $server->id ?>">
-  <div class="script-editor-grid">
-    <div class="card">
-      <div class="card-header">
-        <span class="card-title">LAMP Provisioning Script</span>
-        <div class="script-editor-actions">
-          <button type="button" onclick="copyScript('lamp-script')" class="btn btn-secondary btn-sm">Copy</button>
-          <button type="submit" class="btn btn-primary btn-sm">Save</button>
-        </div>
-      </div>
-      <div class="flush-card-body">
-        <textarea name="body" id="lamp-script" rows="30"
-          class="script-textarea"><?= htmlspecialchars(
-            $lamp_script,
-          ) ?></textarea>
-      </div>
-      <div class="script-help">
-        Run as root on your server: <code>bash lamp-setup.sh</code> &mdash; then click <strong>Mark as Active</strong> above.
-      </div>
-    </div>
-
-    <div class="script-sidebar">
-      <div class="card">
-        <div class="card-header"><span class="card-title">Variables</span></div>
-        <div class="card-body" style="padding:.75rem">
-          <?php foreach ($lamp_vars as $var => $desc): ?>
-            <div style="margin-bottom:.6rem">
-              <code style="font-size:.75rem;color:#6366f1;cursor:pointer;display:block" onclick="insertVar('<?= htmlspecialchars(
-                $var,
-              ) ?>')"><?= htmlspecialchars($var) ?></code>
-              <span style="font-size:.72rem;color:#64748b"><?= htmlspecialchars(
-                $desc,
-              ) ?></span>
-            </div>
-          <?php endforeach; ?>
-          <p style="font-size:.72rem;color:#94a3b8;margin-top:.5rem">Click a variable to insert at cursor.</p>
-        </div>
-      </div>
-
-      <?php if (!empty($lamp_scripts)): ?>
-        <div class="card">
-          <div class="card-header"><span class="card-title">History</span></div>
-          <div style="font-size:.8rem">
-            <?php foreach ($lamp_scripts as $s): ?>
-              <div style="display:flex;justify-content:space-between;align-items:center;padding:.5rem .875rem;border-bottom:1px solid #f1f5f9">
-                <div>
-                  <div style="font-weight:500;color:#0f172a"><?= htmlspecialchars(
-                    $s->name,
-                  ) ?></div>
-                  <div style="font-size:.72rem;color:#94a3b8"><?= date(
-                    "M j, Y H:i",
-                    strtotime($s->created_at),
-                  ) ?></div>
-                </div>
-                <a href="script/show/<?= $s->id ?>" class="btn btn-secondary btn-sm" style="white-space:nowrap">View</a>
-              </div>
-            <?php endforeach; ?>
-          </div>
-        </div>
-      <?php endif; ?>
-    </div>
+<!-- LAMP Script -->
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">LAMP Provisioning Script</span>
+    <button type="button" onclick="copyScript('lamp-script')" class="btn btn-secondary btn-sm">Copy</button>
   </div>
-</form>
+  <div class="flush-card-body">
+    <textarea id="lamp-script" rows="30" class="script-textarea" readonly><?= htmlspecialchars($lamp_script) ?></textarea>
+  </div>
+  <div class="script-help">
+    Run as root on your server: <code>bash lamp-setup.sh</code> &mdash; then click <strong>Mark as Active</strong> above.
+  </div>
+</div>
 
 <!-- Deployments & Health -->
 <div class="card">

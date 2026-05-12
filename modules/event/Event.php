@@ -27,7 +27,7 @@ class Event extends Trongate {
 
     function feed(): void {
         $customer = $this->_require_customer();
-        $filter   = in_array($_GET['filter'] ?? '', ['deployment', 'server', 'service', 'environment', 'script', 'customer'])
+        $filter   = in_array($_GET['filter'] ?? '', ['deployment', 'server', 'service', 'environment', 'customer'])
             ? $_GET['filter']
             : '';
 
@@ -52,7 +52,6 @@ class Event extends Trongate {
             'DeploymentSucceeded'        => 'Deployment Succeeded',
             'DeploymentFailed'           => 'Deployment Failed',
             'DeploymentDeleted'          => 'Deployment Deleted',
-            'DeploymentScriptChanged'    => 'Script Changed',
             'ReleasePromoted'            => 'Release Promoted',
             'ReleaseDemoted'             => 'Release Demoted',
             'ServerCreated'              => 'Server Added',
@@ -64,9 +63,6 @@ class Event extends Trongate {
             'EnvironmentCreated'         => 'Environment Created',
             'EnvironmentVariablesUpdated'=> 'Variables Updated',
             'EnvironmentDeleted'         => 'Environment Deleted',
-            'ScriptCreated'              => 'Script Created',
-            'ScriptUpdated'              => 'Script Updated',
-            'ScriptDeleted'              => 'Script Deleted',
             'HealthCheckCompleted'       => 'Health Check',
             'CustomerLoggedIn'           => 'Logged In',
             'CustomerLoginFailed'        => 'Login Failed',
@@ -83,7 +79,6 @@ class Event extends Trongate {
             'server'     => '#3b82f6',
             'service'    => '#8b5cf6',
             'environment'=> '#f59e0b',
-            'script'     => '#64748b',
             'customer'   => '#10b981',
             default      => '#94a3b8',
         };
@@ -108,7 +103,6 @@ class Event extends Trongate {
             'EnvironmentVariablesUpdated'=> ($payload['var_count'] ?? 0) . ' variable(s)',
             'ReleasePromoted'            => htmlspecialchars($payload['release_path'] ?? ''),
             'ReleaseDemoted'             => htmlspecialchars($payload['previous_release_path'] ?? ''),
-            'DeploymentScriptChanged'    => ($payload['script_id'] ?? null) ? 'custom script #' . $payload['script_id'] : 'reverted to default',
             'CustomerLoginFailed'        => htmlspecialchars($payload['email'] ?? ''),
             default                      => implode(', ', array_filter(array_map(
                 fn($k, $v) => is_scalar($v) && $v !== '' ? htmlspecialchars($k . ': ' . $v) : null,
