@@ -1,57 +1,62 @@
+<?php
+$success = $flash['success'] ?? '';
+$error   = $flash['error']   ?? '';
+?>
 <div class="page-header">
-    <div class="page-header-left">
-        <div class="page-title">Deployments</div>
-        <div style="font-size:.85rem;color:#64748b;margin-top:.25rem">Deploy code as a staged release, then promote it when the database is ready</div>
-    </div>
-    <a href="deployment/create" class="btn btn-primary">+ New Deployment</a>
+    <div class="page-title">Deploy</div>
 </div>
 
-<?php if (empty($deployments)): ?>
-    <div class="card">
-        <div class="empty-state">
-            <div class="empty-icon">&#10148;</div>
-            <div class="empty-title">No deployments yet</div>
-            <div class="empty-desc">Create a deployment to stage a release under /var/www/releases before switching live traffic.</div>
-        </div>
-    </div>
-<?php else: ?>
-    <div class="card">
-        <div class="table-wrap">
-            <table class="ptable">
-                <thead>
-                    <tr>
-                        <th>Server</th>
-                        <th>Environment</th>
-                        <th>Repository</th>
-                        <th>Branch</th>
-                        <th>Domain</th>
-                        <th>Status</th>
-                        <th>Created</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($deployments as $d): ?>
-                        <tr>
-                            <td>
-                                <a href="server/show/<?= $d->server_id ?? '' ?>" style="color:#6366f1;font-weight:600;text-decoration:none">
-                                    <?= htmlspecialchars($d->server_name) ?>
-                                </a>
-                                <div style="font-size:.75rem;color:#94a3b8"><?= htmlspecialchars($d->ip_address) ?></div>
-                            </td>
-                            <td><span class="badge badge-development"><?= htmlspecialchars($d->env_name) ?></span></td>
-                            <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
-                                <?= htmlspecialchars($d->repo_url ?: '—') ?>
-                            </td>
-                            <td><code style="font-size:.8rem;color:#6366f1"><?= htmlspecialchars($d->branch) ?></code></td>
-                            <td><?= htmlspecialchars($d->domain ?: '—') ?></td>
-                            <td><span class="badge badge-<?= htmlspecialchars(str_replace('_', '-', $d->status)) ?>"><?= htmlspecialchars($d->status) ?></span></td>
-                            <td style="font-size:.8rem;color:#94a3b8"><?= date('M j, Y', strtotime($d->created_at)) ?></td>
-                            <td><a href="deployment/show/<?= $d->id ?>" class="btn btn-secondary btn-sm">View</a></td>
-                        </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-        </div>
-    </div>
+<?php if ($success): ?>
+    <div class="alert alert-success"><?= htmlspecialchars($success) ?></div>
+<?php elseif ($error): ?>
+    <div class="alert alert-danger"><?= htmlspecialchars($error) ?></div>
 <?php endif; ?>
+
+<div class="card" style="margin-bottom:1rem">
+    <h3 style="margin:0 0 1rem">Actions</h3>
+    <div style="display:flex;gap:.75rem;flex-wrap:wrap">
+        <button id="btn-deploy" class="btn btn-primary" onclick="startDeploy()">&#9654; Deploy</button>
+        <form method="post" action="deployment/promote" style="margin:0">
+            <button type="submit" class="btn btn-success">&#8593; Promote</button>
+        </form>
+        <form method="post" action="deployment/demote" style="margin:0">
+            <button type="submit" class="btn btn-warning">&#8595; Rollback</button>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <h3 style="margin:0 0 1rem">Output</h3>
+    <pre id="deploy-log" style="background:#0f172a;color:#e2e8f0;padding:1rem;border-radius:.5rem;min-height:10rem;overflow-x:auto;font-size:.8rem;white-space:pre-wrap"></pre>
+</div>
+
+<script>
+function startDeploy() {
+    const log  = document.getElementById('deploy-log');
+    const btn  = document.getElementById('btn-deploy');
+    log.textContent = '';
+    btn.disabled = true;
+    btn.textContent = '… Deploying';
+
+    const es = new EventSource('deployment/stream');
+    es.onmessage = function(e) {
+        const d = JSON.parse(e.data);
+        if (d.line !== undefined) {
+            log.textContent += d.line + '\n';
+            log.scrollTop = log.scrollHeight;
+        }
+        if (d.done) {
+            es.close();
+            btn.disabled = false;
+            btn.textContent = '▶ Deploy';
+            log.textContent += '\n— exit ' + d.exit + ' —';
+        }
+    };
+    es.onerror = function() {
+        es.close();
+        btn.disabled = false;
+        btn.textContent = '▶ Deploy';
+        log.textContent += '\n[connection closed]';
+    };
+}
+</script>

@@ -1,17 +1,6 @@
 <?php
-/**
- * View: scripts/demote_release
- *
- * Renders a bash script that atomically points the live web root symlink back
- * at the previous release directory.
- *
- * @var object $deployment
- */
-
-$d = $deployment;
-$webroot = $d->web_root ?: "/var/www/html";
-$previous_release_path = $d->previous_release_path ?? "";
-$sh = static fn(string $value): string => "'" . str_replace("'", "'\\''", $value) . "'";
+include __DIR__ . '/server.php';
+$sh = static fn(string $v): string => "'" . str_replace("'", "'\\''", $v) . "'";
 ?>
 #!/bin/bash
 set -eo pipefail
@@ -19,49 +8,41 @@ set +u
 umask 022
 
 run_sudo() {
-    if [ "$(id -u)" -eq 0 ]; then
-        "$@"
-        return
-    fi
+    if [ "$(id -u)" -eq 0 ]; then "$@"; return; fi
     sudo -n "$@"
 }
 
 if [ "$(id -u)" -ne 0 ]; then
     if ! command -v sudo >/dev/null 2>&1; then
-        echo "ERROR: sudo is required when demoting as $(whoami)." >&2
-        exit 1
+        echo "ERROR: sudo is required when demoting as $(whoami)." >&2; exit 1
     fi
     if ! sudo -n -l >/dev/null 2>&1; then
-        echo "ERROR: passwordless sudo is required for $(whoami). Re-run provisioning as root or add the Provision sudoers rules." >&2
-        exit 1
+        echo "ERROR: passwordless sudo is required for $(whoami)." >&2; exit 1
     fi
 fi
 
-LIVE_WEB_ROOT=<?= $sh($webroot) ?>;
-ROLLBACK_RELEASE=<?= $sh($previous_release_path) ?>;
+RELEASES_DIR=<?= $sh($releases_path) ?>
+LIVE_WEB_ROOT=<?= $sh($webroot) ?>
 
-if [ -z "$ROLLBACK_RELEASE" ] || [ ! -d "$ROLLBACK_RELEASE" ]; then
-    echo "ERROR: previous release path does not exist: $ROLLBACK_RELEASE" >&2
-    exit 1
-fi
+# Find current live release
+[ ! -L "$LIVE_WEB_ROOT" ] && { echo "ERROR: $LIVE_WEB_ROOT is not a symlink — nothing to roll back." >&2; exit 1; }
+CURRENT=$(readlink -f "$LIVE_WEB_ROOT")
+CURRENT_NAME=$(basename "$CURRENT")
+
+# Previous = second-newest release (excluding current)
+PREVIOUS=$(ls -1 "$RELEASES_DIR" 2>/dev/null | sort | grep -v "^${CURRENT_NAME}$" | tail -1)
+[ -z "$PREVIOUS" ] && { echo "ERROR: no previous release to roll back to." >&2; exit 1; }
+ROLLBACK_RELEASE="$RELEASES_DIR/$PREVIOUS"
+[ ! -d "$ROLLBACK_RELEASE" ] && { echo "ERROR: previous release not found: $ROLLBACK_RELEASE" >&2; exit 1; }
 
 SHARED_ENV_FILE="/var/www/shared/.env"
-if [ -f "$SHARED_ENV_FILE" ]; then
-    ln -sfn "$SHARED_ENV_FILE" "$ROLLBACK_RELEASE/.env"
-    echo "==> Linked rollback .env to $SHARED_ENV_FILE"
-fi
+[ -f "$SHARED_ENV_FILE" ] && ln -sfn "$SHARED_ENV_FILE" "$ROLLBACK_RELEASE/.env" && echo "==> Linked rollback .env"
 
-WEB_PARENT=$(dirname "$LIVE_WEB_ROOT")
-run_sudo mkdir -p "$WEB_PARENT"
-
-TMP_LINK="/tmp/provision_demote_<?= (int) $d->id ?>.$$"
-rm -f "$TMP_LINK"
+TMP_LINK=$(mktemp -u "$LIVE_WEB_ROOT.XXXXXX")
 ln -s "$ROLLBACK_RELEASE" "$TMP_LINK"
 run_sudo mv -Tf "$TMP_LINK" "$LIVE_WEB_ROOT"
 
-if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet apache2; then
-    run_sudo systemctl reload apache2
-fi
+command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet apache2 && run_sudo systemctl reload apache2
 
 echo "Release demoted."
 echo "WEB_ROOT: $LIVE_WEB_ROOT"

@@ -1,63 +1,59 @@
 <?php
-/**
- * View: scripts/deploy_script
- *
- * Renders the bash deployment script for a given deployment row using the
- * same editable template shown in the deployment-create UI.
- *
- * @var object $deployment The deployment row joined with server / environment / script data.
- * @var array  $env_vars   Already-decrypted KEY => value map (empty when none).
- */
+include __DIR__ . '/server.php';
 
-$d = $deployment;
+$release = $releases_path . '/' . date('YmdHis');
+$source  = !empty($zip_path) ? 'zip' : 'git';
 
-$source = $d->source_type ?? "git";
-// Provider-fetched zip: SCP'd by stream(), treat as zip on remote.
-if ($source === "git" && !empty($d->zip_path)) {
-  $source = "zip";
-}
+$env_block    = (static function () use ($env_vars): string {
+    ob_start(); include __DIR__ . '/_env_vars.php'; return ob_get_clean();
+})();
+$vhost_block  = $domain
+    ? (static function () use ($domain, $webroot, $php_version, $release): string {
+        ob_start(); include __DIR__ . '/_vhost.php'; return ob_get_clean();
+    })()
+    : '# (no domain configured — vhost skipped)';
+$config_block = (static function () use ($db_name, $db_user, $db_pass, $env_vars): string {
+    ob_start(); include __DIR__ . '/_config_patch.php'; return ob_get_clean();
+})();
+?>
+#!/bin/bash
+set -euo pipefail
 
-$repo = $d->repo_url ?? "";
-$branch = $d->branch ?? "main";
-$zip_url = "";
-$webroot = $d->web_root ?: "/var/www/html";
-$domain = $d->domain ?: "";
-$db = $d->db_name ?: "";
-$env_vars = $env_vars ?? [];
-$release_path = "/var/www/releases/deployment_" . (int) $d->id . "_" . date("YmdHis");
+<?= $env_block ?>
 
-$render_block = static function (string $file) use (
-  $repo,
-  $branch,
-  $zip_url,
-  $webroot,
-  $domain,
-  $db,
-  $env_vars,
-  $release_path,
-): string {
-  ob_start();
-  include __DIR__ . "/" . $file;
-  return trim((string) ob_get_clean());
-};
+RELEASE_PATH="<?= $release ?>"
+SOURCE_TYPE="<?= $source ?>"
+REPO_URL="<?= $repo ?>"
+BRANCH="<?= $branch ?>"
+WEB_ROOT="<?= $webroot ?>"
 
-$template_path = dirname(__DIR__, 2) . "/assets/deploy_script_template.txt";
-$template = is_file($template_path) ? (string) file_get_contents($template_path) : "";
+run_sudo() { if [ "$(id -u)" = "0" ]; then "$@"; else sudo "$@"; fi; }
 
-$vhost_block = $domain ? $render_block("_vhost.php") : "# (no domain configured)";
-$config_patch_block = $render_block("_config_patch.php");
+echo "==> Creating release directory: $RELEASE_PATH"
+mkdir -p "$RELEASE_PATH"
 
-echo strtr($template, [
-  "{{SERVER_NAME}}" => (string) ($d->server_name ?? ""),
-  "{{SERVER_IP}}" => (string) ($d->ip_address ?? ""),
-  "{{SOURCE_TYPE}}" => $source,
-  "{{REPO_URL}}" => (string) $repo,
-  "{{BRANCH}}" => (string) $branch,
-  "{{WEB_ROOT}}" => (string) $webroot,
-  "{{RELEASE_PATH}}" => $release_path,
-  "{{DOMAIN}}" => (string) $domain,
-  "{{DB_NAME}}" => (string) $db,
-  "{{ENV_VARS}}" => $render_block("_env_vars.php"),
-  "{{VHOST_BLOCK}}" => $vhost_block,
-  "{{CONFIG_PATCH_BLOCK}}" => $config_patch_block,
-]);
+if [ "$SOURCE_TYPE" = "zip" ]; then
+    echo "==> Extracting zip"
+    EXTRACT_DIR=$(mktemp -d)
+    unzip -q "$DEPLOY_ZIP" -d "$EXTRACT_DIR"
+    INNER=$(find "$EXTRACT_DIR" -mindepth 1 -maxdepth 1 -type d | head -1)
+    cp -a "${INNER:-$EXTRACT_DIR}/." "$RELEASE_PATH/"
+    rm -rf "$EXTRACT_DIR"
+    echo "==> Zip extracted"
+else
+    echo "==> Cloning $REPO_URL ($BRANCH)"
+    git clone --depth 1 --branch "$BRANCH" "$REPO_URL" "$RELEASE_PATH"
+    echo "==> Clone complete"
+fi
+
+<?= $vhost_block ?>
+
+<?= $config_block ?>
+
+echo "==> Setting permissions"
+chgrp -R www-data "$RELEASE_PATH" 2>/dev/null || true
+
+DEPLOYED_SHA=$(git -C "$RELEASE_PATH" rev-parse HEAD 2>/dev/null || echo "")
+echo "RELEASE_PATH: $RELEASE_PATH"
+[ -n "$DEPLOYED_SHA" ] && echo "SHA: $DEPLOYED_SHA"
+echo "==> Done."
