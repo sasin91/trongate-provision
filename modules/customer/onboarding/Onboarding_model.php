@@ -45,8 +45,8 @@ class Onboarding_model extends Model {
 
     function first_environment(int $customer_id): object|false {
         $rows = $this->db->query_bind(
-            "SELECT * FROM environment WHERE customer_id = :id ORDER BY id ASC LIMIT 1",
-            ['id' => $customer_id],
+            "SELECT * FROM environment ORDER BY id ASC LIMIT 1",
+            [],
             'object'
         );
         return $rows[0] ?? false;
@@ -56,8 +56,7 @@ class Onboarding_model extends Model {
         $rows = $this->db->query_bind(
             "SELECT s.*
              FROM server s
-             JOIN customer c ON c.id = s.customer_id
-             WHERE s.customer_id = :id
+             JOIN customer c ON c.id = :id
              ORDER BY CASE WHEN s.id = c.onboarding_server_id THEN 0 ELSE 1 END, s.id ASC
              LIMIT 1",
             ['id' => $customer_id],
@@ -73,7 +72,6 @@ class Onboarding_model extends Model {
     function first_deployment(int $customer_id): object|false {
         $rows = $this->db->query_bind(
             "SELECT * FROM deployment
-             WHERE customer_id = :id
              ORDER BY
                 CASE status
                     WHEN 'script_ready' THEN 0
@@ -83,7 +81,7 @@ class Onboarding_model extends Model {
                 END,
                 id DESC
              LIMIT 1",
-            ['id' => $customer_id],
+            [],
             'object'
         );
         return $rows[0] ?? false;
@@ -106,8 +104,8 @@ class Onboarding_model extends Model {
             "SELECT DISTINCT s.provider_id
              FROM server s
              JOIN deployment d ON d.server_id = s.id
-             WHERE s.customer_id = :cid AND s.provider = 'hetzner' AND s.provider_id IS NOT NULL",
-            ['cid' => $customer_id],
+             WHERE s.provider = 'hetzner' AND s.provider_id IS NOT NULL",
+            [],
             'object'
         );
         return array_column($rows, 'provider_id');

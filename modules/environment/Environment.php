@@ -9,14 +9,13 @@ class Environment extends Trongate {
     private array $php_versions = ['8.4', '8.3', '8.2', '8.1', '8.0', '7.4'];
 
     function index(): void {
-        $customer = $this->_require_customer();
+        $this->_require_auth();
 
         $data = [
             'view_module'   => 'environment',
             'view_file'     => 'index',
             'page_title'    => 'Environments',
-            'current_email' => $customer->email,
-            'environments'  => $this->model->all((int) $customer->id),
+            'environments'  => $this->model->all(),
         ];
 
         $this->module('templates');
@@ -24,7 +23,7 @@ class Environment extends Trongate {
     }
 
     function create(): void {
-        $customer = $this->_require_customer();
+        $this->_require_auth();
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $this->validation->set_rules('name',        'name',        'required|max_length[100]');
@@ -34,7 +33,6 @@ class Environment extends Trongate {
                 $name = post('name', true);
                 $cfg_patches = $this->_config_patch_variables_from_post();
                 $env_id = $this->model->create_with_defaults(
-                    (int) $customer->id,
                     $name,
                     post('php_version', true),
                     post('domain', true) ?: null,
@@ -48,7 +46,6 @@ class Environment extends Trongate {
                 $this->module('environment-services');
                 $this->services->model->create_defaults_for_environment(
                     (int) $env_id,
-                    (int) $customer->id,
                     (array) ($_POST['services'] ?? []),
                     post('domain', true) ?: null,
                 );
@@ -66,7 +63,6 @@ class Environment extends Trongate {
             'view_module'   => 'environment',
             'view_file'     => 'create',
             'page_title'    => 'New Environment',
-            'current_email' => $customer->email,
             'form_location' => 'environment/create',
             'php_versions'  => $this->php_versions,
         ];
@@ -77,22 +73,21 @@ class Environment extends Trongate {
 
     function show(): void {
         $id = (int) segment(3);
-        $customer = $this->_require_customer();
-        $env = $this->model->get($id, (int) $customer->id);
+        $this->_require_auth();
+        $env = $this->model->get($id);
         if ($env === false) { redirect('environment'); }
 
         $this->module('server');
-        $servers = $this->server->model->by_environment($id, (int) $customer->id);
+        $servers = $this->server->model->by_environment($id);
 
         $this->module('environment-services');
-        $services      = $this->services->model->by_environment($id, (int) $customer->id);
+        $services      = $this->services->model->by_environment($id);
         $type_defaults = $this->services->model->get_type_defaults();
 
         $data = [
             'view_module'   => 'environment',
             'view_file'     => 'show',
             'page_title'    => htmlspecialchars($env->name),
-            'current_email' => $customer->email,
             'env'           => $env,
             'servers'       => $servers,
             'services'      => $services,
@@ -105,17 +100,16 @@ class Environment extends Trongate {
 
     function variables(): void {
         $id = (int) segment(3);
-        $customer = $this->_require_customer();
-        $env = $this->model->get($id, (int) $customer->id);
+        $this->_require_auth();
+        $env = $this->model->get($id);
         if ($env === false) { redirect('environment'); }
 
         $data = [
             'view_module'   => 'environment',
             'view_file'     => 'variables',
             'page_title'    => htmlspecialchars($env->name) . ' — Variables',
-            'current_email' => $customer->email,
             'env'           => $env,
-            'variables'     => $this->model->get_variables($id, (int) $customer->id),
+            'variables'     => $this->model->get_variables($id),
             'form_location' => 'environment/save_variables/' . $id,
         ];
 
@@ -125,8 +119,8 @@ class Environment extends Trongate {
 
     function save_variables(): void {
         $id = (int) segment(3);
-        $customer = $this->_require_customer();
-        $env = $this->model->get($id, (int) $customer->id);
+        $this->_require_auth();
+        $env = $this->model->get($id);
         if ($env === false) { redirect('environment'); }
 
         $this->validation->set_rules('dummy', 'dummy', 'max_length[1]');
@@ -147,7 +141,7 @@ class Environment extends Trongate {
             $vars[$k] = (string) ($values[$i] ?? '');
         }
 
-        $this->model->save_variables($id, (int) $customer->id, $vars);
+        $this->model->save_variables($id, $vars);
         $this->_emit('EnvironmentVariablesUpdated', 'environment', $id, [
             'var_count' => count($vars),
         ]);
@@ -157,14 +151,14 @@ class Environment extends Trongate {
 
     function delete(): void {
         $id = (int) segment(3);
-        $customer = $this->_require_customer();
+        $this->_require_auth();
         $this->validation->set_rules('dummy', 'dummy', 'max_length[1]');
         if ($this->validation->run() !== true) { redirect('environment'); return; }
-        $snap = $this->model->get($id, (int) $customer->id);
+        $snap = $this->model->get($id);
         if ($snap && !empty($snap->zip_path)) {
             if (file_exists($snap->zip_path)) @unlink($snap->zip_path);
         }
-        $this->model->delete($id, (int) $customer->id);
+        $this->model->delete($id);
         $this->_emit('EnvironmentDeleted', 'environment', $id, [
             'name' => $snap ? $snap->name : null,
         ]);
@@ -183,9 +177,10 @@ class Environment extends Trongate {
         ], fn($v) => $v !== '' && $v !== null);
     }
 
-    private function _require_customer(): object {
-        $this->module('customer');
-        $this->customer->_require_onboarded();
-        return $this->customer->_require_customer();
+    private function _require_auth(): void {
+        $this->module('trongate_tokens');
+        if (!$this->trongate_tokens->_attempt_get_valid_token(1)) {
+            redirect('login');
+        }
     }
 }

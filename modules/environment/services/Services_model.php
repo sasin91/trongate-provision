@@ -21,33 +21,32 @@ class Services_model extends Model {
         return $this->type_defaults[$type]['label'] ?? ucfirst($type);
     }
 
-    function all(int $customer_id): array {
+    function all(): array {
         return $this->db->query_bind(
             "SELECT sv.*, e.name as env_name
              FROM service sv
              JOIN environment e ON sv.environment_id = e.id
-             WHERE sv.customer_id = :cid
              ORDER BY sv.created_at DESC",
-            ['cid' => $customer_id],
+            [],
             'object'
         );
     }
 
-    function by_environment(int $environment_id, int $customer_id): array {
+    function by_environment(int $environment_id, int $customer_id = 0): array {
         return $this->db->query_bind(
-            "SELECT * FROM service WHERE environment_id = :eid AND customer_id = :cid ORDER BY created_at DESC",
-            ['eid' => $environment_id, 'cid' => $customer_id],
+            "SELECT * FROM service WHERE environment_id = :eid ORDER BY created_at DESC",
+            ['eid' => $environment_id],
             'object'
         );
     }
 
-    function get(int $id, int $customer_id): object|false {
+    function get(int $id, int $customer_id = 0): object|false {
         $rows = $this->db->query_bind(
             "SELECT sv.*, e.name as env_name
              FROM service sv
              JOIN environment e ON sv.environment_id = e.id
-             WHERE sv.id = :id AND sv.customer_id = :cid LIMIT 1",
-            ['id' => $id, 'cid' => $customer_id],
+             WHERE sv.id = :id LIMIT 1",
+            ['id' => $id],
             'object'
         );
         return $rows[0] ?? false;
@@ -59,7 +58,6 @@ class Services_model extends Model {
 
     function create_defaults_for_environment(
         int $environment_id,
-        int $customer_id,
         array $types,
         ?string $domain = null
     ): void {
@@ -73,7 +71,6 @@ class Services_model extends Model {
             $default = $this->type_defaults[$type];
             $this->create([
                 'environment_id' => $environment_id,
-                'customer_id'    => $customer_id,
                 'name'           => $default['label'],
                 'type'           => $type,
                 'host'           => $type === 'apache2' ? ($domain ?: null) : null,
@@ -87,21 +84,21 @@ class Services_model extends Model {
         $this->db->update($id, ['status' => $status], 'service');
     }
 
-    function delete_service(int $id, int $customer_id): void {
+    function delete_service(int $id, int $customer_id = 0): void {
         $this->db->query_bind(
             "DELETE FROM health_check WHERE target_type = 'service' AND target_id = :id",
             ['id' => $id]
         );
         $this->db->query_bind(
-            "DELETE FROM service WHERE id = :id AND customer_id = :cid",
-            ['id' => $id, 'cid' => $customer_id]
+            "DELETE FROM service WHERE id = :id",
+            ['id' => $id]
         );
     }
 
-    function environments_for_customer(int $customer_id): array {
+    function environments_for_select(): array {
         return $this->db->query_bind(
-            "SELECT id, name, php_version FROM environment WHERE customer_id = :cid ORDER BY name ASC",
-            ['cid' => $customer_id],
+            "SELECT id, name, php_version FROM environment ORDER BY name ASC",
+            [],
             'object'
         );
     }

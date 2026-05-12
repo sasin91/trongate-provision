@@ -120,7 +120,6 @@ class Onboarding extends Trongate
 
     $this->module('environment');
     $env_id = $this->environment->model->create_with_defaults(
-      (int) $customer->id,
       post('name', true),
       post('php_version', true),
       post('domain', true) ?: null,
@@ -135,7 +134,6 @@ class Onboarding extends Trongate
     $this->module('environment-services');
     $this->services->model->create_defaults_for_environment(
       (int) $env_id,
-      (int) $customer->id,
       (array) ($_POST['services'] ?? []),
       post('domain', true) ?: null,
     );
@@ -208,7 +206,6 @@ class Onboarding extends Trongate
 
       $server_id = (int) $this->model->create_server([
         'environment_id' => (int) $env->id,
-        'customer_id'    => (int) $customer->id,
         'name'           => post('name', true),
         'ip_address'     => post('ip_address', true),
         'ssh_user'       => 'root',
@@ -281,7 +278,6 @@ class Onboarding extends Trongate
       $this->model->create_deployment([
         'server_id'      => $server_id,
         'environment_id' => (int) $env->id,
-        'customer_id'    => (int) $customer->id,
         'source_type'    => $source_type,
         'repo_url'       => $source_type === 'git' ? post('repo_url', true) : null,
         'branch'         => $source_type === 'git' ? post('branch', true)   : null,
@@ -436,7 +432,7 @@ class Onboarding extends Trongate
       $server_types = $h->list_server_types();
       $all_servers  = $h->list_servers();
       $this->module('server');
-      $tracked    = $this->server->model->tracked_hetzner_ids((int) $customer->id);
+      $tracked    = $this->server->model->tracked_hetzner_ids();
       $importable = array_values(array_filter($all_servers, fn($s) => !in_array($s['id'], $tracked)));
     } catch (Throwable $e) {
       $_SESSION['flash_error'] = 'Could not load Hetzner data: ' . $e->getMessage();
@@ -480,7 +476,6 @@ class Onboarding extends Trongate
 
     $server_id = (int) $this->model->create_server([
       'environment_id' => (int) $env->id,
-      'customer_id'    => (int) $customer->id,
       'name'           => $name,
       'ip_address'     => $result['ipv4'],
       'ipv6_address'   => $result['ipv6'] ?? null,
@@ -516,7 +511,6 @@ class Onboarding extends Trongate
 
     $server_id = (int) $this->model->create_server([
       'environment_id' => (int) $env->id,
-      'customer_id'    => (int) $customer->id,
       'name'           => post('name', true),
       'ip_address'     => $remote['ip'],
       'ipv6_address'   => $remote['ipv6'] ?? null,
@@ -745,7 +739,7 @@ class Onboarding extends Trongate
     }
 
     $this->module('deployment');
-    $deployment = $this->deployment->model->get((int) $deployment->id, (int) $customer->id);
+    $deployment = $this->deployment->model->get((int) $deployment->id);
     if ($deployment === false) {
       redirect('customer');
       return;
@@ -767,7 +761,7 @@ class Onboarding extends Trongate
     }
 
     $this->module('deployment');
-    $deployment = $this->deployment->model->get((int) $deployment->id, (int) $customer->id);
+    $deployment = $this->deployment->model->get((int) $deployment->id);
     if ($deployment === false || !in_array($deployment->status, ['staged', 'success'], true)) {
       http_response_code(409);
       return;
@@ -918,7 +912,7 @@ class Onboarding extends Trongate
     }
     $this->module('server');
 
-    return $this->server->model->get($server_id, (int) $customer->id);
+    return $this->server->model->get($server_id);
   }
 
   function _remember_onboarding_server(object $customer, int $server_id): void

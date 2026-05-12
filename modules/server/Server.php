@@ -8,14 +8,13 @@ class Server extends Trongate
 
   function index(): void
   {
-    $customer = $this->_require_onboarded_customer();
+    $this->_require_auth();
 
     $data = [
       "view_module" => "server",
       "view_file" => "index",
       "page_title" => "Servers",
-      "current_email" => $customer->email,
-      "servers" => $this->model->all((int) $customer->id),
+      "servers" => $this->model->all(),
       "additional_includes_top" => ["server_module/css/server.css"],
     ];
 
@@ -25,14 +24,14 @@ class Server extends Trongate
 
   function create(): void
   {
-    $customer = $this->_require_onboarded_customer();
+    $this->_require_auth();
 
     if ($_SERVER["REQUEST_METHOD"] === "POST") {
       $provider = post("provider", true) ?: "manual";
       $stored = match ($provider) {
-        "hetzner" => $this->_try_store_hetzner($customer),
-        "hetzner_import" => $this->_try_import_hetzner($customer),
-        default => $this->_try_store_manual($customer),
+        "hetzner" => $this->_try_store_hetzner(),
+        "hetzner_import" => $this->_try_import_hetzner(),
+        default => $this->_try_store_manual(),
       };
       if ($stored) {
         return;
@@ -40,20 +39,21 @@ class Server extends Trongate
     }
 
     $preselected_env = (int) ($_GET["env"] ?? 0);
+    $customer_id = $this->_get_current_customer_id();
 
     $this->module("provider");
-    $has_hetzner = $this->provider->model->has_hetzner((int) $customer->id);
+    $has_hetzner = $this->provider->model->has_hetzner($customer_id);
     $hetzner_regions = [];
     $hetzner_types = [];
     $hetzner_servers = [];
 
     if ($has_hetzner) {
       try {
-        $h = $this->_hetzner_client((int) $customer->id);
+        $h = $this->_hetzner_client($customer_id);
         $hetzner_regions = $h->list_regions();
         $hetzner_types = $h->list_server_types();
         $all_servers = $h->list_servers();
-        $tracked = $this->model->tracked_hetzner_ids((int) $customer->id);
+        $tracked = $this->model->tracked_hetzner_ids();
         $hetzner_servers = array_values(
           array_filter($all_servers, fn($s) => !in_array($s["id"], $tracked)),
         );
@@ -68,11 +68,8 @@ class Server extends Trongate
       "view_module" => "server",
       "view_file" => "create",
       "page_title" => "Add Server",
-      "current_email" => $customer->email,
       "form_location" => "server/create",
-      "environments" => $this->model->environments_for_customer(
-        (int) $customer->id,
-      ),
+      "environments" => $this->model->environments_for_select(),
       "preselected_env" => $preselected_env,
       "has_hetzner" => $has_hetzner,
       "hetzner_regions" => $hetzner_regions,
@@ -85,7 +82,7 @@ class Server extends Trongate
     $this->templates->customer($data);
   }
 
-  private function _try_store_manual(object $customer): bool
+  private function _try_store_manual(): bool
   {
     $this->validation->set_rules("name", "name", "required|max_length[100]");
     $this->validation->set_rules("environment_id", "environment", "required");
@@ -107,7 +104,6 @@ class Server extends Trongate
 
     $id = $this->model->create([
       "environment_id" => (int) post("environment_id"),
-      "customer_id" => (int) $customer->id,
       "name" => post("name", true),
       "ip_address" => post("ip_address", true),
       "ssh_user" => post("ssh_user", true),
@@ -127,7 +123,7 @@ class Server extends Trongate
     return true;
   }
 
-  private function _try_store_hetzner(object $customer): bool
+  private function _try_store_hetzner(): bool
   {
     $this->validation->set_rules("name", "name", "required|max_length[100]");
     $this->validation->set_rules("environment_id", "environment", "required");
@@ -138,14 +134,16 @@ class Server extends Trongate
       return false;
     }
 
+    $customer_id = $this->_get_current_customer_id();
+
     $this->module("provider");
-    if (!$this->provider->model->has_hetzner((int) $customer->id)) {
+    if (!$this->provider->model->has_hetzner($customer_id)) {
       $_SESSION["flash_error"] = "Hetzner not connected.";
       return false;
     }
 
-    $h = $this->_hetzner_client((int) $customer->id);
-    $creds = $this->provider->model->get_hetzner((int) $customer->id);
+    $h = $this->_hetzner_client($customer_id);
+    $creds = $this->provider->model->get_hetzner($customer_id);
     $name = post("name", true);
     $region = post("region", true);
     $type = post("server_type", true);
@@ -168,7 +166,7 @@ class Server extends Trongate
     $ssh_key_ids = array_values(array_unique(array_filter($ssh_key_ids)));
 
     $this->provider->model->save_hetzner(
-      (int) $customer->id,
+      $customer_id,
       $creds["token"],
       $creds["ssh_key_id"] ?? $runner_key["id"],
       $creds["ssh_key_label"] ?? $runner_key["name"],
@@ -187,7 +185,6 @@ class Server extends Trongate
 
     $id = $this->model->create([
       "environment_id" => (int) post("environment_id"),
-      "customer_id" => (int) $customer->id,
       "name" => $name,
       "ip_address" => $result["ipv4"],
       "ipv6_address" => $result["ipv6"] ?? null,
@@ -213,7 +210,7 @@ class Server extends Trongate
     return true;
   }
 
-  private function _try_import_hetzner(object $customer): bool
+  private function _try_import_hetzner(): bool
   {
     $this->validation->set_rules("name", "name", "required|max_length[100]");
     $this->validation->set_rules("environment_id", "environment", "required");
@@ -223,13 +220,15 @@ class Server extends Trongate
       return false;
     }
 
+    $customer_id = $this->_get_current_customer_id();
+
     $this->module("provider");
-    if (!$this->provider->model->has_hetzner((int) $customer->id)) {
+    if (!$this->provider->model->has_hetzner($customer_id)) {
       $_SESSION["flash_error"] = "Hetzner not connected.";
       return false;
     }
 
-    $h = $this->_hetzner_client((int) $customer->id);
+    $h = $this->_hetzner_client($customer_id);
     $provider_id = post("hetzner_id", true);
     $remote = $h->get_server($provider_id);
 
@@ -240,7 +239,6 @@ class Server extends Trongate
 
     $id = $this->model->create([
       "environment_id" => (int) post("environment_id"),
-      "customer_id" => (int) $customer->id,
       "name" => post("name", true),
       "ip_address" => $remote["ip"],
       "ipv6_address" => $remote["ipv6"] ?? null,
@@ -268,7 +266,7 @@ class Server extends Trongate
 
   function server_types_options(): void
   {
-    $customer = $this->_require_customer();
+    $this->_require_auth();
 
     $location = preg_replace(
       "/[^a-z0-9-]/",
@@ -280,7 +278,7 @@ class Server extends Trongate
     }
 
     try {
-      $h = $this->_hetzner_client((int) $customer->id);
+      $h = $this->_hetzner_client($this->_get_current_customer_id());
       $server_types = $h->list_server_types($location);
     } catch (Throwable) {
       http_response_code(503);
@@ -295,8 +293,8 @@ class Server extends Trongate
   function show(): void
   {
     $id = (int) segment(3);
-    $customer = $this->_require_onboarded_customer();
-    $server = $this->model->get($id, (int) $customer->id);
+    $this->_require_auth();
+    $server = $this->model->get($id);
     if ($server === false) {
       redirect("server");
     }
@@ -308,7 +306,7 @@ class Server extends Trongate
       $server->status === "pending"
     ) {
       try {
-        $h = $this->_hetzner_client((int) $customer->id);
+        $h = $this->_hetzner_client($this->_get_current_customer_id());
         $remote = $h->get_server($server->provider_id);
         if (
           $remote &&
@@ -336,10 +334,7 @@ class Server extends Trongate
     }
 
     $this->module("deployment");
-    $deployments = $this->deployment->model->by_server(
-      $id,
-      (int) $customer->id,
-    );
+    $deployments = $this->deployment->model->by_server($id);
 
     $lamp_script = $this->_generate_lamp_script($server);
 
@@ -347,7 +342,6 @@ class Server extends Trongate
       "view_module" => "server",
       "view_file" => "show",
       "page_title" => htmlspecialchars($server->name),
-      "current_email" => $customer->email,
       "server" => $server,
       "deployments" => $deployments,
       "lamp_script" => $lamp_script,
@@ -364,13 +358,13 @@ class Server extends Trongate
   function reboot(): void
   {
     $id = (int) segment(3);
-    $customer = $this->_require_onboarded_customer();
+    $this->_require_auth();
     $this->validation->set_rules("dummy", "dummy", "max_length[1]");
     if ($this->validation->run() !== true) {
       redirect("server/show/" . $id);
       return;
     }
-    $server = $this->model->get($id, (int) $customer->id);
+    $server = $this->model->get($id);
     if (
       $server === false ||
       $server->provider !== "hetzner" ||
@@ -379,7 +373,7 @@ class Server extends Trongate
       redirect("server");
     }
     try {
-      $h = $this->_hetzner_client((int) $customer->id);
+      $h = $this->_hetzner_client($this->_get_current_customer_id());
       $h->reboot_server($server->provider_id);
       $_SESSION["flash_success"] = "Reboot requested.";
     } catch (Throwable $e) {
@@ -391,26 +385,26 @@ class Server extends Trongate
   function destroy_hetzner(): void
   {
     $id = (int) segment(3);
-    $customer = $this->_require_onboarded_customer();
+    $this->_require_auth();
     $this->validation->set_rules("dummy", "dummy", "max_length[1]");
     if ($this->validation->run() !== true) {
       redirect("server/show/" . $id);
       return;
     }
-    $server = $this->model->get($id, (int) $customer->id);
+    $server = $this->model->get($id);
     if ($server === false) {
       redirect("server");
     }
 
     if ($server->provider === "hetzner" && !empty($server->provider_id)) {
       try {
-        $h = $this->_hetzner_client((int) $customer->id);
+        $h = $this->_hetzner_client($this->_get_current_customer_id());
         $h->delete_server($server->provider_id);
       } catch (Throwable) {
       }
     }
 
-    $this->model->delete($id, (int) $customer->id);
+    $this->model->delete($id);
     $this->_emit("ServerDeleted", "server", $id, [
       "name" => $server->name ?? null,
       "provider" => $server->provider ?? null,
@@ -458,7 +452,7 @@ class Server extends Trongate
       exit();
     }
 
-    $s = $this->model->get($id, (int) $customer->id);
+    $s = $this->model->get($id);
     if ($s === false) {
       http_response_code(404);
       $emit("Server not found.");
@@ -501,7 +495,7 @@ class Server extends Trongate
         return;
       }
 
-      $this->_wait_for_existing_provisioning($id, (int) $customer->id, $emit);
+      $this->_wait_for_existing_provisioning($id, $emit);
       return;
     }
 
@@ -520,7 +514,6 @@ class Server extends Trongate
     $env_vars = $this->_ensure_database_environment_variables(
       $env_vars,
       $s,
-      (int) $customer->id,
     );
     $db_name = $env_vars["DB_NAME"] ?? ($s->db_name ?? "");
     $db_user = $env_vars["DB_USER"] ?? "";
@@ -623,7 +616,7 @@ class Server extends Trongate
     }
   }
 
-  function _wait_for_existing_provisioning(int $id, int $customer_id, callable $emit): void
+  function _wait_for_existing_provisioning(int $id, callable $emit): void
   {
     $emit("Server is already being provisioned; waiting for the running job to finish.");
 
@@ -633,7 +626,7 @@ class Server extends Trongate
     while ((time() - $started) < $timeout) {
       sleep(5);
 
-      $server = $this->model->get($id, $customer_id);
+      $server = $this->model->get($id);
       if ($server === false) {
         $emit("Server not found.");
         $this->stream->done(["status" => "failed"]);
@@ -656,13 +649,13 @@ class Server extends Trongate
   function mark_active(): void
   {
     $id = (int) segment(3);
-    $customer = $this->_require_onboarded_customer();
+    $this->_require_auth();
     $this->validation->set_rules("dummy", "dummy", "max_length[1]");
     if ($this->validation->run() !== true) {
       redirect("server/show/" . $id);
       return;
     }
-    $server = $this->model->get($id, (int) $customer->id);
+    $server = $this->model->get($id);
     if ($server !== false) {
       $old_status = $server->status;
       $this->model->update_status($id, "active");
@@ -679,14 +672,14 @@ class Server extends Trongate
   function enable_ssl(): void
   {
     $id = (int) segment(3);
-    $customer = $this->_require_onboarded_customer();
+    $this->_require_auth();
     $this->validation->set_rules("dummy", "dummy", "max_length[1]");
     if ($this->validation->run() !== true) {
       redirect("server/show/" . $id);
       return;
     }
 
-    $server = $this->model->get($id, (int) $customer->id);
+    $server = $this->model->get($id);
     if ($server === false) {
       redirect("server");
       return;
@@ -756,14 +749,14 @@ class Server extends Trongate
   function delete(): void
   {
     $id = (int) segment(3);
-    $customer = $this->_require_onboarded_customer();
+    $this->_require_auth();
     $this->validation->set_rules("dummy", "dummy", "max_length[1]");
     if ($this->validation->run() !== true) {
       redirect("server/show/" . $id);
       return;
     }
-    $snap = $this->model->get($id, (int) $customer->id);
-    $this->model->delete($id, (int) $customer->id);
+    $snap = $this->model->get($id);
+    $this->model->delete($id);
     $this->_emit("ServerDeleted", "server", $id, [
       "name" => $snap ? $snap->name : null,
       "provider" => $snap ? $snap->provider : null,
@@ -797,7 +790,6 @@ class Server extends Trongate
   private function _ensure_database_environment_variables(
     array $env_vars,
     object $server,
-    int $customer_id,
   ): array {
     $env_id = (int) ($server->environment_id ?? 0);
     if ($env_id <= 0) {
@@ -826,7 +818,7 @@ class Server extends Trongate
       $changed = true;
     }
     if ($changed) {
-      $this->environment->model->save_variables($env_id, $customer_id, $env_vars);
+      $this->environment->model->save_variables($env_id, $env_vars);
     }
 
     return $env_vars;
@@ -963,16 +955,18 @@ class Server extends Trongate
     return $this->cloud->hetzner($creds["token"]);
   }
 
-  private function _require_customer(): object
+  private function _get_current_customer_id(): int
   {
     $this->module("customer");
-    return $this->customer->_require_customer();
+    $customer = $this->customer->model->_get_current_customer();
+    return $customer !== false ? (int) $customer->id : 0;
   }
 
-  private function _require_onboarded_customer(): object
+  private function _require_auth(): void
   {
-    $this->module("customer");
-    $this->customer->_require_onboarded();
-    return $this->customer->_require_customer();
+    $this->module("trongate_tokens");
+    if (!$this->trongate_tokens->_attempt_get_valid_token(1)) {
+      redirect("login");
+    }
   }
 }

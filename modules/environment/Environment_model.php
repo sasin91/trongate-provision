@@ -2,21 +2,20 @@
 
 class Environment_model extends Model {
 
-    function all(int $customer_id): array {
+    function all(): array {
         return $this->db->query_bind(
             "SELECT e.*, (SELECT COUNT(*) FROM server WHERE environment_id = e.id) as server_count
              FROM environment e
-             WHERE e.customer_id = :cid
              ORDER BY e.created_at DESC",
-            ['cid' => $customer_id],
+            [],
             'object'
         );
     }
 
-    function get(int $id, int $customer_id): object|false {
+    function get(int $id): object|false {
         $rows = $this->db->query_bind(
-            "SELECT * FROM environment WHERE id = :id AND customer_id = :cid LIMIT 1",
-            ['id' => $id, 'cid' => $customer_id],
+            "SELECT * FROM environment WHERE id = :id LIMIT 1",
+            ['id' => $id],
             'object'
         );
         return $rows[0] ?? false;
@@ -27,7 +26,6 @@ class Environment_model extends Model {
     }
 
     function create_with_defaults(
-        int $customer_id,
         string $name,
         string $php_version,
         ?string $domain = null,
@@ -35,7 +33,6 @@ class Environment_model extends Model {
     ): int|false {
         $db_name = $this->slug_db_name($name);
         $env_id = $this->create([
-            'customer_id' => $customer_id,
             'name'        => $name,
             'php_version' => $php_version,
             'web_root'    => '/var/www/html',
@@ -48,7 +45,7 @@ class Environment_model extends Model {
         }
 
         $db_password = bin2hex(random_bytes(16));
-        $this->save_variables((int) $env_id, $customer_id, array_merge([
+        $this->save_variables((int) $env_id, array_merge([
             'DB_NAME'     => $db_name,
             'DB_USER'     => $db_name,
             'DB_PASSWORD' => $db_password,
@@ -63,7 +60,7 @@ class Environment_model extends Model {
         return trim($slug, '_');
     }
 
-    function delete(int $id, int $customer_id): bool {
+    function delete(int $id): bool {
         $this->db->query_bind(
             "DELETE FROM health_check WHERE target_type = 'service' AND target_id IN (
                 SELECT sv.id FROM service sv WHERE sv.environment_id = :eid)",
@@ -85,31 +82,31 @@ class Environment_model extends Model {
             ['eid' => $id]
         );
         $this->db->query_bind(
-            "DELETE FROM server WHERE environment_id = :eid AND customer_id = :cid",
-            ['eid' => $id, 'cid' => $customer_id]
+            "DELETE FROM server WHERE environment_id = :eid",
+            ['eid' => $id]
         );
         $this->db->query_bind(
-            "DELETE FROM environment WHERE id = :id AND customer_id = :cid",
-            ['id' => $id, 'cid' => $customer_id]
+            "DELETE FROM environment WHERE id = :id",
+            ['id' => $id]
         );
         return true;
     }
 
     // ── Variables (encrypted JSON) ─────────────────────────────────
 
-    function get_variables(int $env_id, int $customer_id): array {
-        $env = $this->get($env_id, $customer_id);
+    function get_variables(int $env_id): array {
+        $env = $this->get($env_id);
         if ($env === false || empty($env->variables)) return [];
         $json = $this->_decrypt($env->variables);
         return json_decode($json, true) ?: [];
     }
 
-    function save_variables(int $env_id, int $customer_id, array $vars): void {
+    function save_variables(int $env_id, array $vars): void {
         $json = json_encode($vars, JSON_UNESCAPED_UNICODE);
         $encrypted = $this->_encrypt($json);
         $this->db->query_bind(
-            "UPDATE environment SET variables = :v WHERE id = :id AND customer_id = :cid",
-            ['v' => $encrypted, 'id' => $env_id, 'cid' => $customer_id]
+            "UPDATE environment SET variables = :v WHERE id = :id",
+            ['v' => $encrypted, 'id' => $env_id]
         );
     }
 

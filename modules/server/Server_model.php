@@ -2,20 +2,19 @@
 
 class Server_model extends Model {
 
-    function all(int $customer_id): array {
+    function all(): array {
         return $this->db->query_bind(
             "SELECT s.*, e.name as env_name, e.php_version,
                     (SELECT COUNT(*) FROM deployment WHERE server_id = s.id) as deploy_count
              FROM server s
              JOIN environment e ON s.environment_id = e.id
-             WHERE s.customer_id = :cid
              ORDER BY s.created_at DESC",
-            ['cid' => $customer_id],
+            [],
             'object'
         );
     }
 
-    function all_with_health(int $customer_id): array {
+    function all_with_health(): array {
         return $this->db->query_bind(
             "SELECT s.id, s.name, s.ip_address, s.status, s.provider, s.region, s.server_type,
                     s.environment_id, s.created_at,
@@ -26,38 +25,35 @@ class Server_model extends Model {
                     MAX(lhc.checked_at) as last_checked_at
              FROM server s
              JOIN environment e ON s.environment_id = e.id
-             LEFT JOIN deployment d ON d.server_id = s.id AND d.customer_id = :cid
+             LEFT JOIN deployment d ON d.server_id = s.id
              LEFT JOIN health_check lhc ON lhc.target_type = 'deployment'
                  AND lhc.target_id = d.id
                  AND lhc.id = (SELECT MAX(id) FROM health_check
                                WHERE target_type = 'deployment' AND target_id = d.id)
-             WHERE s.customer_id = :cid2
              GROUP BY s.id, s.name, s.ip_address, s.status, s.provider, s.region, s.server_type,
                       s.environment_id, s.created_at, e.name, e.php_version
              ORDER BY s.created_at DESC",
-            ['cid' => $customer_id, 'cid2' => $customer_id],
+            [],
             'object'
         );
     }
 
-    function by_environment(int $env_id, int $customer_id): array {
+    function by_environment(int $env_id): array {
         return $this->db->query_bind(
-            "SELECT * FROM server WHERE environment_id = :eid AND customer_id = :cid ORDER BY created_at DESC",
-            ['eid' => $env_id, 'cid' => $customer_id],
+            "SELECT * FROM server WHERE environment_id = :eid ORDER BY created_at DESC",
+            ['eid' => $env_id],
             'object'
         );
     }
 
-    function get(int $id, int $customer_id): object|false {
+    function get(int $id): object|false {
         $rows = $this->db->query_bind(
             "SELECT s.*, e.name as env_name, e.php_version,
-                    e.domain, e.web_root, e.db_name, e.variables AS env_variables_enc,
-                    c.email AS customer_email
+                    e.domain, e.web_root, e.db_name, e.variables AS env_variables_enc
              FROM server s
              JOIN environment e ON s.environment_id = e.id
-             JOIN customer    c ON c.id = s.customer_id
-             WHERE s.id = :id AND s.customer_id = :cid LIMIT 1",
-            ['id' => $id, 'cid' => $customer_id],
+             WHERE s.id = :id LIMIT 1",
+            ['id' => $id],
             'object'
         );
         return $rows[0] ?? false;
@@ -99,7 +95,7 @@ class Server_model extends Model {
         }
     }
 
-    function delete(int $id, int $customer_id): void {
+    function delete(int $id): void {
         $this->db->query_bind(
             "DELETE FROM health_check WHERE target_type = 'deployment' AND target_id IN (
                 SELECT id FROM deployment WHERE server_id = :sid)",
@@ -110,24 +106,24 @@ class Server_model extends Model {
             ['sid' => $id]
         );
         $this->db->query_bind(
-            "DELETE FROM server WHERE id = :id AND customer_id = :cid",
-            ['id' => $id, 'cid' => $customer_id]
+            "DELETE FROM server WHERE id = :id",
+            ['id' => $id]
         );
     }
 
-    function tracked_hetzner_ids(int $customer_id): array {
+    function tracked_hetzner_ids(): array {
         $rows = $this->db->query_bind(
-            "SELECT provider_id FROM server WHERE customer_id = :cid AND provider = 'hetzner' AND provider_id IS NOT NULL",
-            ['cid' => $customer_id],
+            "SELECT provider_id FROM server WHERE provider = 'hetzner' AND provider_id IS NOT NULL",
+            [],
             'object'
         );
         return array_column($rows, 'provider_id');
     }
 
-    function environments_for_customer(int $customer_id): array {
+    function environments_for_select(): array {
         return $this->db->query_bind(
-            "SELECT id, name FROM environment WHERE customer_id = :cid ORDER BY name ASC",
-            ['cid' => $customer_id],
+            "SELECT id, name FROM environment ORDER BY name ASC",
+            [],
             'object'
         );
     }

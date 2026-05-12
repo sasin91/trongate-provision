@@ -21,7 +21,6 @@ CREATE TABLE IF NOT EXISTS customer (
 
 CREATE TABLE IF NOT EXISTS environment (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    customer_id INT UNSIGNED NOT NULL,
     name VARCHAR(100) NOT NULL,
     php_version VARCHAR(10) NOT NULL DEFAULT '8.4',
     web_root VARCHAR(200) DEFAULT '/var/www/html',
@@ -34,7 +33,6 @@ CREATE TABLE IF NOT EXISTS environment (
 CREATE TABLE IF NOT EXISTS server (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     environment_id INT UNSIGNED NOT NULL,
-    customer_id INT UNSIGNED NOT NULL,
     name VARCHAR(100) NOT NULL,
     ip_address VARCHAR(45) NOT NULL,
     ipv6_address VARCHAR(45) DEFAULT NULL,
@@ -52,7 +50,6 @@ CREATE TABLE IF NOT EXISTS deployment (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     server_id INT UNSIGNED NOT NULL,
     environment_id INT UNSIGNED NOT NULL,
-    customer_id INT UNSIGNED NOT NULL,
     source_type ENUM('git','zip') NOT NULL DEFAULT 'git',
     repo_url VARCHAR(500) DEFAULT NULL,
     branch VARCHAR(100) DEFAULT 'main',
@@ -74,7 +71,6 @@ CREATE TABLE IF NOT EXISTS deployment (
 CREATE TABLE IF NOT EXISTS service (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     environment_id INT UNSIGNED NOT NULL,
-    customer_id INT UNSIGNED NOT NULL,
     name VARCHAR(100) NOT NULL,
     type ENUM('mysql','redis','postgresql','memcached','http','custom') DEFAULT 'mysql',
     host VARCHAR(255) DEFAULT NULL,
@@ -98,7 +94,6 @@ CREATE TABLE IF NOT EXISTS health_check (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     target_type ENUM('deployment','service') NOT NULL,
     target_id INT UNSIGNED NOT NULL,
-    customer_id INT UNSIGNED NOT NULL,
     status ENUM('healthy','unhealthy','unknown') DEFAULT 'unknown',
     response_time_ms INT DEFAULT NULL,
     http_status INT DEFAULT NULL,
@@ -109,13 +104,11 @@ CREATE TABLE IF NOT EXISTS health_check (
 CREATE TABLE IF NOT EXISTS event_log (
     id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     event_type  VARCHAR(80)  NOT NULL,
-    customer_id INT UNSIGNED NOT NULL,
     entity_type VARCHAR(40)  NOT NULL,
     entity_id   INT UNSIGNED NOT NULL DEFAULT 0,
     payload     LONGTEXT     NOT NULL,
     created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     KEY idx_entity   (entity_type, entity_id),
-    KEY idx_customer (customer_id, created_at),
     KEY idx_type     (event_type),
     KEY idx_created  (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci

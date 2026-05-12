@@ -11,14 +11,13 @@ class Deployment extends Trongate
 
   function index(): void
   {
-    $customer = $this->_require_customer();
+    $this->_require_auth();
 
     $data = [
       "view_module" => "deployment",
       "view_file" => "index",
       "page_title" => "Deployments",
-      "current_email" => $customer->email,
-      "deployments" => $this->model->all((int) $customer->id),
+      "deployments" => $this->model->all(),
       "additional_includes_top" => ["deployment_module/css/deployment.css"],
     ];
 
@@ -28,7 +27,7 @@ class Deployment extends Trongate
 
   function create(): void
   {
-    $customer = $this->_require_customer();
+    $this->_require_auth();
 
     if (post('submit', true) === 'Create Deployment') {
       $source_type = post("source_type", true) === "zip" ? "zip" : "git";
@@ -53,12 +52,9 @@ class Deployment extends Trongate
         $this->module("server");
         $this->module("environment");
         $server_ok =
-          $this->server->model->get($server_id, (int) $customer->id) !== false;
+          $this->server->model->get($server_id) !== false;
         $env_ok =
-          $this->environment->model->get(
-            $environment_id,
-            (int) $customer->id,
-          ) !== false;
+          $this->environment->model->get($environment_id) !== false;
 
         $lock_name = "";
 
@@ -68,7 +64,6 @@ class Deployment extends Trongate
           !$this->_env_server_allowed(
             $environment_id,
             $server_id,
-            (int) $customer->id,
             $lock_name,
           )
         ) {
@@ -98,7 +93,6 @@ class Deployment extends Trongate
           $id = $this->model->create([
             "server_id"      => $server_id,
             "environment_id" => $environment_id,
-            "customer_id"    => (int) $customer->id,
             "source_type"    => $source_type,
             "repo_url"       => $source_type === "git" ? post("repo_url", true) : null,
             "branch"         => $source_type === "git" ? post("branch", true) : null,
@@ -124,7 +118,7 @@ class Deployment extends Trongate
     $wizard_id = (int) segment(3);
     $wizard_deployment = false;
     if ($wizard_id > 0 && post('submit', true) !== 'Create Deployment') {
-      $wizard_deployment = $this->model->get($wizard_id, (int) $customer->id);
+      $wizard_deployment = $this->model->get($wizard_id);
       if ($wizard_deployment === false) {
         redirect("deployment/create");
         return;
@@ -138,12 +132,9 @@ class Deployment extends Trongate
       "view_module" => "deployment",
       "view_file" => "create",
       "page_title" => "New Deployment",
-      "current_email" => $customer->email,
       "form_location" => "deployment/create",
-      "servers" => $this->model->servers_for_customer((int) $customer->id),
-      "environments" => $this->model->environments_for_customer(
-        (int) $customer->id,
-      ),
+      "servers" => $this->model->servers_for_select(),
+      "environments" => $this->model->environments_for_select(),
       "deployment" => $wizard_deployment,
       "preselected_server" => $preselected_server,
       "preselected_env" => $preselected_env,
@@ -155,8 +146,8 @@ class Deployment extends Trongate
   function show(): void
   {
     $id = (int) segment(3);
-    $customer = $this->_require_customer();
-    $deployment = $this->model->get($id, (int) $customer->id);
+    $this->_require_auth();
+    $deployment = $this->model->get($id);
     if ($deployment === false) {
       redirect("deployment");
     }
@@ -167,7 +158,7 @@ class Deployment extends Trongate
     $this->module("environment-services");
     $services = $this->services->model->by_environment(
       (int) $deployment->env_id,
-      (int) $customer->id,
+      (int) ($_SESSION['customer_id'] ?? 0),
     );
     $this->module("server-health");
     $latest_health = $this->health->model->latest("deployment", $id);
@@ -176,7 +167,7 @@ class Deployment extends Trongate
     $recent_events = $this->event->model->recent_for_entity(
       "deployment",
       $id,
-      (int) $customer->id,
+      (int) ($_SESSION['customer_id'] ?? 0),
       5,
     );
 
@@ -184,7 +175,6 @@ class Deployment extends Trongate
       "view_module" => "deployment",
       "view_file" => "show",
       "page_title" => "Deployment #" . $id,
-      "current_email" => $customer->email,
       "deployment" => $deployment,
       "deploy_script" => $display_script,
       "services" => $services,
@@ -227,7 +217,7 @@ class Deployment extends Trongate
       exit();
     }
 
-    $d = $this->model->get($id, (int) $customer->id);
+    $d = $this->model->get($id);
     if ($d === false) {
       http_response_code(404);
       $emit("Deployment not found.");
@@ -268,7 +258,7 @@ class Deployment extends Trongate
     }
 
     if ($d->status === "running") {
-      $this->_wait_for_running_deployment($id, (int) $customer->id, $emit);
+      $this->_wait_for_running_deployment($id, $emit);
       return;
     }
 
@@ -347,7 +337,7 @@ class Deployment extends Trongate
       $message = "Deployment finished remotely, but Provision could not save the staged release metadata: " . $e->getMessage();
       $emit($message);
       try {
-        $this->model->mark_stale_running_failed($id, (int) $customer->id, $message);
+        $this->model->mark_stale_running_failed($id, $message);
       } catch (Throwable) {
       }
       $this->stream->done(["status" => "failed", "sha" => $sha, "release_path" => $release_path]);
@@ -373,10 +363,10 @@ class Deployment extends Trongate
     $this->stream->done(["status" => $status, "sha" => $sha, "release_path" => $release_path]);
   }
 
-  private function _wait_for_running_deployment(int $id, int $customer_id, callable $emit): void
+  private function _wait_for_running_deployment(int $id, callable $emit): void
   {
     $stale_after = self::RUNNING_STALE_SECONDS;
-    $current = $this->model->get($id, $customer_id);
+    $current = $this->model->get($id);
     if ($current === false) {
       $emit("Deployment not found.");
       $this->stream->done(["status" => "failed", "sha" => null]);
@@ -407,7 +397,7 @@ class Deployment extends Trongate
     }
 
     $message = "Deployment was left in running state for more than " . self::RUNNING_STALE_SECONDS . " seconds. It was marked failed so you can retry.";
-    $this->model->mark_stale_running_failed($id, $customer_id, $message);
+    $this->model->mark_stale_running_failed($id, $message);
     $emit($message);
     $this->stream->done(["status" => "failed", "sha" => null]);
   }
@@ -415,8 +405,8 @@ class Deployment extends Trongate
   function reupload_zip(): void
   {
     $id = (int) segment(3);
-    $customer = $this->_require_customer();
-    $d = $this->model->get($id, (int) $customer->id);
+    $this->_require_auth();
+    $d = $this->model->get($id);
     if ($d === false) {
       redirect("deployment");
       return;
@@ -445,7 +435,7 @@ class Deployment extends Trongate
     }
 
     $old_path = (string) ($d->zip_path ?? "");
-    $this->model->set_zip_path($id, (int) $customer->id, $zip_path);
+    $this->model->set_zip_path($id, $zip_path);
     if ($old_path !== "" && $old_path !== $zip_path && file_exists($old_path)) {
       @unlink($old_path);
     }
@@ -460,13 +450,13 @@ class Deployment extends Trongate
   function mark_success(): void
   {
     $id = (int) segment(3);
-    $customer = $this->_require_customer();
+    $this->_require_auth();
     $this->validation->set_rules("dummy", "dummy", "max_length[1]");
     if ($this->validation->run() !== true) {
       redirect("deployment/show/" . $id);
       return;
     }
-    $d = $this->model->get($id, (int) $customer->id);
+    $d = $this->model->get($id);
     if ($d !== false) {
       $prev_status = $d->status;
       $this->model->update_status($id, "success");
@@ -486,13 +476,13 @@ class Deployment extends Trongate
   function promote_release(): void
   {
     $id = (int) segment(3);
-    $customer = $this->_require_customer();
+    $this->_require_auth();
     $this->validation->set_rules("dummy", "dummy", "max_length[1]");
     if ($this->validation->run() !== true) {
       redirect("deployment/show/" . $id);
       return;
     }
-    $result = $this->_promote_release_result($id, (int) $customer->id);
+    $result = $this->_promote_release_result($id);
     if (!$result["ok"]) {
       $_SESSION["flash_error"] = $result["message"];
       redirect("deployment/show/" . $id);
@@ -508,8 +498,8 @@ class Deployment extends Trongate
   function scan_release_sql(): void
   {
     $id = (int) segment(3);
-    $customer = $this->_require_customer();
-    $d = $this->model->get($id, (int) $customer->id);
+    $this->_require_auth();
+    $d = $this->model->get($id);
     $this->module('http');
     if ($d === false || $d->status !== "staged" || empty($d->release_path)) {
       $this->http->json_response(["ok" => false, "message" => "Only staged releases can be scanned for SQL files."], 422);
@@ -549,8 +539,8 @@ class Deployment extends Trongate
   function delete_release_sql(): void
   {
     $id = (int) segment(3);
-    $customer = $this->_require_customer();
-    $d = $this->model->get($id, (int) $customer->id);
+    $this->_require_auth();
+    $d = $this->model->get($id);
     $this->module('http');
     if ($d === false || $d->status !== "staged" || empty($d->release_path)) {
       $this->http->json_response(["ok" => false, "message" => "Only staged releases can have SQL files deleted."], 422);
@@ -608,8 +598,8 @@ class Deployment extends Trongate
   function promote_release_wizard(): void
   {
     $id = (int) segment(3);
-    $customer = $this->_require_customer();
-    $result = $this->_promote_release_result($id, (int) $customer->id);
+    $this->_require_auth();
+    $result = $this->_promote_release_result($id);
     $this->module('http');
     $this->http->json_response($result, $result["ok"] ? 200 : 422);
   }
@@ -617,13 +607,13 @@ class Deployment extends Trongate
   function demote_release(): void
   {
     $id = (int) segment(3);
-    $customer = $this->_require_customer();
+    $this->_require_auth();
     $this->validation->set_rules("dummy", "dummy", "max_length[1]");
     if ($this->validation->run() !== true) {
       redirect("deployment/show/" . $id);
       return;
     }
-    $d = $this->model->get($id, (int) $customer->id);
+    $d = $this->model->get($id);
     if ($d === false || $d->status !== "success" || empty($d->previous_release_path)) {
       $_SESSION["flash_error"] = "Only live deployments with a previous release can be demoted.";
       redirect("deployment/show/" . $id);
@@ -638,13 +628,13 @@ class Deployment extends Trongate
       return;
     }
 
-    $this->model->demote_release($id, (int) $customer->id);
+    $this->model->demote_release($id);
     $this->_emit("ReleaseDemoted", "deployment", $id, [
       "release_path" => $d->release_path,
       "previous_release_path" => $d->previous_release_path,
     ]);
 
-    $summary = $this->_run_environment_health_checks($id, (int) $d->env_id, (int) $customer->id);
+    $summary = $this->_run_environment_health_checks($id, (int) $d->env_id);
     $_SESSION["flash_success"] =
       "Release demoted. Health checks: {$summary["healthy"]} healthy, {$summary["unhealthy"]} unhealthy, {$summary["unknown"]} unknown.";
     redirect("deployment/show/" . $id);
@@ -653,17 +643,17 @@ class Deployment extends Trongate
   function delete(): void
   {
     $id = (int) segment(3);
-    $customer = $this->_require_customer();
+    $this->_require_auth();
     $this->validation->set_rules("dummy", "dummy", "max_length[1]");
     if ($this->validation->run() !== true) {
       redirect("deployment/show/" . $id);
       return;
     }
-    $snap = $this->model->get($id, (int) $customer->id);
+    $snap = $this->model->get($id);
     if ($snap && !empty($snap->zip_path) && file_exists($snap->zip_path)) {
       @unlink($snap->zip_path);
     }
-    $this->model->delete($id, (int) $customer->id);
+    $this->model->delete($id);
     $this->_emit("DeploymentDeleted", "deployment", $id, [
       "repo_url" => $snap ? $snap->repo_url : null,
       "server_id" => $snap ? (int) $snap->server_id : null,
@@ -672,9 +662,9 @@ class Deployment extends Trongate
     redirect("deployment");
   }
 
-  private function _promote_release_result(int $id, int $customer_id): array
+  private function _promote_release_result(int $id): array
   {
-    $d = $this->model->get($id, $customer_id);
+    $d = $this->model->get($id);
     if ($d === false || $d->status !== "staged" || empty($d->release_path)) {
       if ($d !== false && $d->status === "staged") {
         $recovered_path = $this->_release_path_from_log((string) ($d->run_log ?? ""));
@@ -704,13 +694,13 @@ class Deployment extends Trongate
     if (preg_match("/PREVIOUS_RELEASE_PATH\s*:\s*(.*)$/mi", $result["log"], $m)) {
       $previous_release_path = trim($m[1]) ?: null;
     }
-    $this->model->promote_release($id, $customer_id, $previous_release_path);
+    $this->model->promote_release($id, $previous_release_path);
     $this->_emit("ReleasePromoted", "deployment", $id, [
       "release_path" => $d->release_path,
       "previous_release_path" => $previous_release_path,
     ]);
 
-    $health = $this->_run_environment_health_checks($id, (int) $d->env_id, $customer_id);
+    $health = $this->_run_environment_health_checks($id, (int) $d->env_id);
 
     return [
       "ok" => true,
@@ -863,9 +853,10 @@ class Deployment extends Trongate
     ];
   }
 
-  private function _run_environment_health_checks(int $deployment_id, int $env_id, int $customer_id): array
+  private function _run_environment_health_checks(int $deployment_id, int $env_id): array
   {
     $summary = ["healthy" => 0, "unhealthy" => 0, "unknown" => 0];
+    $customer_id = (int) ($_SESSION['customer_id'] ?? 0);
     $record = static function (?array $result) use (&$summary): void {
       $status = $result["status"] ?? "unknown";
       if (!isset($summary[$status])) {
@@ -961,14 +952,13 @@ class Deployment extends Trongate
   private function _env_server_allowed(
     int $env_id,
     int $server_id,
-    int $customer_id,
     string &$locked_name,
   ): bool {
     $rows = $this->db->query_bind(
       "SELECT d.server_id, s.name FROM deployment d
              JOIN server s ON s.id = d.server_id
-             WHERE d.environment_id = :eid AND d.customer_id = :cid LIMIT 1",
-      ["eid" => $env_id, "cid" => $customer_id],
+             WHERE d.environment_id = :eid LIMIT 1",
+      ["eid" => $env_id],
       "object",
     );
     if (empty($rows)) {
@@ -1068,13 +1058,6 @@ class Deployment extends Trongate
     }
   }
 
-  private function _require_customer(): object
-  {
-    $this->module("customer");
-    $this->customer->_require_onboarded();
-    return $this->customer->_require_customer();
-  }
-
   private function _get_provider_archive_url(string $repo_url, string $branch): string|false
   {
     $b = rawurlencode($branch);
@@ -1115,5 +1098,13 @@ class Deployment extends Trongate
 
     $this->module("storage");
     return $this->storage->put('deploy_zips/provision_deploy_' . hash('sha256', $data) . '.zip', $data);
+  }
+
+  private function _require_auth(): void
+  {
+    $this->module("trongate_tokens");
+    if (!$this->trongate_tokens->_attempt_get_valid_token(1)) {
+      redirect("login");
+    }
   }
 }
