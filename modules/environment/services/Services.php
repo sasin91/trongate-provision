@@ -12,14 +12,13 @@ class Services extends Trongate
 
   function index(): void
   {
-    $customer = $this->_require_customer();
+    $this->_require_auth();
 
     $data = [
       'view_module'   => 'environment/services',
       'view_file'     => 'index',
       'page_title'    => 'Services',
-      'current_email' => $customer->email,
-      'services'      => $this->model->all((int) $customer->id),
+      'services'      => $this->model->all(),
       'type_defaults' => $this->model->get_type_defaults(),
     ];
 
@@ -29,7 +28,7 @@ class Services extends Trongate
 
   function create(): void
   {
-    $customer = $this->_require_customer();
+    $this->_require_auth();
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       $this->validation->set_rules('environment_id', 'environment', 'required');
@@ -41,12 +40,11 @@ class Services extends Trongate
       if ($this->validation->run() === true) {
         $environment_id = (int) post('environment_id');
         $this->module('environment');
-        if ($this->environment->model->get($environment_id, (int) $customer->id) === false) {
+        if ($this->environment->model->get($environment_id) === false) {
           $_SESSION['flash_error'] = 'Invalid environment.';
         } else {
           $id = $this->model->create([
             'environment_id' => $environment_id,
-            'customer_id'    => (int) $customer->id,
             'name'           => post('name', true),
             'type'           => post('type', true),
             'host'           => post('host', true),
@@ -74,9 +72,8 @@ class Services extends Trongate
       'view_module'   => 'environment/services',
       'view_file'     => 'create',
       'page_title'    => 'New Service',
-      'current_email' => $customer->email,
       'form_location' => 'environment-services/create',
-      'environments'  => $this->model->environments_for_customer((int) $customer->id),
+      'environments'  => $this->model->environments_for_select(),
       'type_defaults' => $this->model->get_type_defaults(),
       'preselected'   => $preselected,
     ];
@@ -88,21 +85,20 @@ class Services extends Trongate
   function show(): void
   {
     $id = (int) segment(3);
-    $customer = $this->_require_customer();
-    $service = $this->model->get($id, (int) $customer->id);
+    $this->_require_auth();
+    $service = $this->model->get($id);
     if ($service === false) {
       redirect('environment-services');
     }
 
     $health_model = new Health_model();
-    $history = $health_model->history('service', $id, (int) $customer->id, 10);
+    $history = $health_model->history('service', $id, 0, 10);
     $latest  = $health_model->latest('service', $id);
 
     $data = [
       'view_module'   => 'environment/services',
       'view_file'     => 'show',
       'page_title'    => htmlspecialchars($service->name),
-      'current_email' => $customer->email,
       'service'       => $service,
       'history'       => $history,
       'latest_health' => $latest,
@@ -116,13 +112,13 @@ class Services extends Trongate
   function mark_active(): void
   {
     $id = (int) segment(3);
-    $customer = $this->_require_customer();
+    $this->_require_auth();
     $this->validation->set_rules('dummy', 'dummy', 'max_length[1]');
     if ($this->validation->run() !== true) {
       redirect('environment-services/show/' . $id);
       return;
     }
-    $s = $this->model->get($id, (int) $customer->id);
+    $s = $this->model->get($id);
     if ($s !== false) {
       $old_status = $s->status;
       $this->model->update_status($id, 'active');
@@ -138,14 +134,14 @@ class Services extends Trongate
   function delete(): void
   {
     $id = (int) segment(3);
-    $customer = $this->_require_customer();
+    $this->_require_auth();
     $this->validation->set_rules('dummy', 'dummy', 'max_length[1]');
     if ($this->validation->run() !== true) {
       redirect('environment-services/show/' . $id);
       return;
     }
-    $snap = $this->model->get($id, (int) $customer->id);
-    $this->model->delete_service($id, (int) $customer->id);
+    $snap = $this->model->get($id);
+    $this->model->delete_service($id);
     $this->_emit('ServiceDeleted', 'service', $id, [
       'name' => $snap ? $snap->name : null,
       'type' => $snap ? $snap->type : null,
@@ -154,10 +150,11 @@ class Services extends Trongate
     redirect('environment-services');
   }
 
-  private function _require_customer(): object
+  private function _require_auth(): void
   {
-    $this->module('customer');
-    $this->customer->_require_onboarded();
-    return $this->customer->_require_customer();
+    $this->module('trongate_tokens');
+    if (!$this->trongate_tokens->_attempt_get_valid_token(1)) {
+      redirect('login');
+    }
   }
 }

@@ -54,12 +54,8 @@ class Onboarding_model extends Model {
 
     function first_server(int $customer_id): object|false {
         $rows = $this->db->query_bind(
-            "SELECT s.*
-             FROM server s
-             JOIN customer c ON c.id = :id
-             ORDER BY CASE WHEN s.id = c.onboarding_server_id THEN 0 ELSE 1 END, s.id ASC
-             LIMIT 1",
-            ['id' => $customer_id],
+            "SELECT * FROM server ORDER BY id ASC LIMIT 1",
+            [],
             'object'
         );
         return $rows[0] ?? false;

@@ -156,6 +156,7 @@ class Deployment extends Trongate
     $display_script = $this->_redact_deploy_script($script, $deployment);
 
     $this->module("environment-services");
+    // TODO: remove after event/health modules are migrated off customer_id (Task 3)
     $services = $this->services->model->by_environment(
       (int) $deployment->env_id,
       (int) ($_SESSION['customer_id'] ?? 0),
@@ -164,6 +165,7 @@ class Deployment extends Trongate
     $latest_health = $this->health->model->latest("deployment", $id);
 
     $this->module("event");
+    // TODO: remove after event/health modules are migrated off customer_id (Task 3)
     $recent_events = $this->event->model->recent_for_entity(
       "deployment",
       $id,
@@ -856,6 +858,7 @@ class Deployment extends Trongate
   private function _run_environment_health_checks(int $deployment_id, int $env_id): array
   {
     $summary = ["healthy" => 0, "unhealthy" => 0, "unknown" => 0];
+    // TODO: remove after event/health modules are migrated off customer_id (Task 3)
     $customer_id = (int) ($_SESSION['customer_id'] ?? 0);
     $record = static function (?array $result) use (&$summary): void {
       $status = $result["status"] ?? "unknown";

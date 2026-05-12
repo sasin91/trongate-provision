@@ -686,7 +686,14 @@ class Server extends Trongate
     }
 
     $domain = trim((string) ($server->domain ?? ""));
+    // Fall back to the site owner email when the server record has no customer_email
+    // (customer_id JOIN was removed; customer_email is no longer populated by Server_model::get()).
     $email = trim((string) ($server->customer_email ?? ""));
+    if ($email === "" && defined("OUR_EMAIL_ADDRESS") && OUR_EMAIL_ADDRESS !== "") {
+      $email = OUR_EMAIL_ADDRESS;
+    }
+    // Reflect the resolved email back onto the server object so _render_certbot_script picks it up.
+    $server->customer_email = $email;
     $user = $server->ssh_user ?: "root";
 
     if (!defined("RUNNER_SSH_KEY") || !RUNNER_SSH_KEY) {
@@ -712,7 +719,7 @@ class Server extends Trongate
     }
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
       $_SESSION["flash_error"] =
-        "Configure a valid customer email before enabling SSL.";
+        "Configure a valid contact email before enabling SSL. Set OUR_EMAIL_ADDRESS in config/site_owner.php.";
       redirect("server/show/" . $id);
       return;
     }
