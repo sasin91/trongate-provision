@@ -18,6 +18,7 @@ class Deployment_onboarding extends Trongate
 
     function index(): void
     {
+        $this->_require_auth();
         redirect('deployment-onboarding/environment');
     }
 
@@ -32,39 +33,44 @@ class Deployment_onboarding extends Trongate
             $this->validation->set_rules('php_version', 'PHP version',      'required');
 
             if ($this->validation->run() === true) {
-                $cfg_patches = array_filter([
-                    'PROVISION_ENV'          => post('cfg_env', true),
-                    'PROVISION_WEBSITE_NAME' => post('cfg_website_name', true),
-                    'PROVISION_OUR_NAME'     => post('cfg_our_name', true),
-                    'PROVISION_OUR_TELNUM'   => post('cfg_our_telnum', true),
-                    'PROVISION_OUR_ADDRESS'  => post('cfg_our_address', true),
-                    'PROVISION_OUR_EMAIL'    => post('cfg_our_email', true),
-                ], fn($v) => $v !== '' && $v !== null);
+                $allowed_php_versions = ['8.0', '8.1', '8.2', '8.3', '8.4'];
+                if (!in_array(post('php_version', true), $allowed_php_versions, true)) {
+                    $_SESSION['flash_error'] = 'Invalid PHP version.';
+                } else {
+                    $cfg_patches = array_filter([
+                        'PROVISION_ENV'          => post('cfg_env', true),
+                        'PROVISION_WEBSITE_NAME' => post('cfg_website_name', true),
+                        'PROVISION_OUR_NAME'     => post('cfg_our_name', true),
+                        'PROVISION_OUR_TELNUM'   => post('cfg_our_telnum', true),
+                        'PROVISION_OUR_ADDRESS'  => post('cfg_our_address', true),
+                        'PROVISION_OUR_EMAIL'    => post('cfg_our_email', true),
+                    ], fn($v) => $v !== '' && $v !== null);
 
-                $this->module('deployment-environment');
-                $env_id = $this->environment->model->create_with_defaults(
-                    post('name', true),
-                    post('php_version', true),
-                    post('domain', true) ?: null,
-                    $cfg_patches,
-                );
+                    $this->module('deployment-environment');
+                    $env_id = $this->environment->model->create_with_defaults(
+                        post('name', true),
+                        post('php_version', true),
+                        post('domain', true) ?: null,
+                        $cfg_patches,
+                    );
 
-                if ($env_id === false) {
-                    $_SESSION['flash_error'] = 'Environment could not be created.';
-                    $this->_render_wizard_view('environment', ['php_versions' => $this->php_versions], 1, 'login', 'Sign out');
+                    if ($env_id === false) {
+                        $_SESSION['flash_error'] = 'Environment could not be created.';
+                        $this->_render_wizard_view('environment', ['php_versions' => $this->php_versions], 1, 'login', 'Sign out');
+                        return;
+                    }
+
+                    $this->module('deployment-services');
+                    $this->services->model->create_defaults_for_environment(
+                        (int) $env_id,
+                        (array) ($_POST['services'] ?? []),
+                        post('domain', true) ?: null,
+                    );
+
+                    $_SESSION['onboarding_env_id'] = (int) $env_id;
+                    redirect('deployment-onboarding/server');
                     return;
                 }
-
-                $this->module('deployment-services');
-                $this->services->model->create_defaults_for_environment(
-                    (int) $env_id,
-                    (array) ($_POST['services'] ?? []),
-                    post('domain', true) ?: null,
-                );
-
-                $_SESSION['onboarding_env_id'] = (int) $env_id;
-                redirect('deployment-onboarding/server');
-                return;
             }
         }
 
@@ -259,7 +265,7 @@ class Deployment_onboarding extends Trongate
         }
 
         $h           = $this->_hetzner_client($customer_id);
-        $provider_id = post('hetzner_id', true);
+        $provider_id = (string)(int) post('hetzner_id', true);
         $remote      = $h->get_server($provider_id);
 
         if (!$remote) {
@@ -294,6 +300,12 @@ class Deployment_onboarding extends Trongate
     function provision(): void
     {
         $this->_require_auth();
+
+        $env_id = (int) ($_SESSION['onboarding_env_id'] ?? 0);
+        if ($env_id === 0) {
+            redirect('deployment-onboarding/environment');
+            return;
+        }
 
         $server_id = (int) ($_SESSION['onboarding_server_id'] ?? 0);
         if ($server_id === 0) {
