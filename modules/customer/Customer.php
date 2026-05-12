@@ -14,7 +14,7 @@ class Customer extends Trongate {
         $this->_require_onboarded();
         $customer = $this->_require_customer();
 
-        $this->module('server');
+        $this->module('deployment-server');
         $servers = $this->server->model->all_with_health((int) $customer->id);
 
         $data = [

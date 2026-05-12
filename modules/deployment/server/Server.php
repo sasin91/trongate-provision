@@ -1,6 +1,6 @@
 <?php
 
-require_once __DIR__ . "/../deployment/event/Emits_events.php";
+require_once __DIR__ . "/../event/Emits_events.php";
 
 class Server extends Trongate
 {
@@ -11,11 +11,11 @@ class Server extends Trongate
     $this->_require_auth();
 
     $data = [
-      "view_module" => "server",
+      "view_module" => "deployment/server",
       "view_file" => "index",
       "page_title" => "Servers",
       "servers" => $this->model->all(),
-      "additional_includes_top" => ["server_module/css/server.css"],
+      "additional_includes_top" => ["deployment_module/css/server.css"],
     ];
 
     $this->module("templates");
@@ -65,7 +65,7 @@ class Server extends Trongate
     }
 
     $data = [
-      "view_module" => "server",
+      "view_module" => "deployment/server",
       "view_file" => "create",
       "page_title" => "Add Server",
       "form_location" => "server/create",
@@ -75,7 +75,7 @@ class Server extends Trongate
       "hetzner_regions" => $hetzner_regions,
       "hetzner_types" => $hetzner_types,
       "hetzner_servers" => $hetzner_servers,
-      "additional_includes_top" => ["server_module/css/server.css"],
+      "additional_includes_top" => ["deployment_module/css/server.css"],
     ];
 
     $this->module("templates");
@@ -339,14 +339,14 @@ class Server extends Trongate
     $lamp_script = $this->_generate_lamp_script($server);
 
     $data = [
-      "view_module" => "server",
+      "view_module" => "deployment/server",
       "view_file" => "show",
       "page_title" => htmlspecialchars($server->name),
       "server" => $server,
       "deployments" => $deployments,
       "lamp_script" => $lamp_script,
       "additional_includes_top" => array_filter([
-        "server_module/css/server.css",
+        "deployment_module/css/server.css",
         $server->status === 'pending' ? '<meta http-equiv="refresh" content="8">' : null,
       ]),
     ];
@@ -507,7 +507,7 @@ class Server extends Trongate
 
     $provision_user = getenv("PROVISION_USER") ?: "provision";
 
-    $this->module("environment");
+    $this->module("deployment-environment");
     $env_vars = $this->environment->model->decrypt_blob(
       $s->env_variables_enc ?? "",
     );
@@ -778,7 +778,7 @@ class Server extends Trongate
     return (string) $this->view(
       "scripts/lamp_script",
       [
-        "view_module" => "server",
+        "view_module" => "deployment/server",
         "server" => $server,
       ],
       true,
@@ -789,7 +789,7 @@ class Server extends Trongate
   {
     return (string) $this->view(
       "scripts/default_provision_script",
-      ["view_module" => "server"],
+      ["view_module" => "deployment/server"],
       true,
     );
   }
@@ -836,7 +836,7 @@ class Server extends Trongate
     return (string) $this->view(
       "scripts/certbot_script",
       [
-        "view_module" => "server",
+        "view_module" => "deployment/server",
         "server" => $server,
       ],
       true,

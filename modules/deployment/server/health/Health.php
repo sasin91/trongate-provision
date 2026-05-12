@@ -1,6 +1,6 @@
 <?php
 
-require_once __DIR__ . '/../../deployment/event/Emits_events.php';
+require_once __DIR__ . '/../../event/Emits_events.php';
 
 class Health extends Trongate
 {
@@ -16,7 +16,7 @@ class Health extends Trongate
     $stats    = $this->model->stats((int) $customer->id);
 
     $data = [
-      'view_module'   => 'server/health',
+      'view_module'   => 'deployment/server/health',
       'view_file'     => 'health',
       'page_title'    => 'Health',
       'current_email' => $customer->email,
@@ -95,7 +95,7 @@ class Health extends Trongate
       $this->check_deployment_result((int) $d->id, $cid);
     }
 
-    $this->module('environment/services');
+    $this->module('deployment-environment-services');
     $services = array_slice($this->services->model->all($cid), 0, 10);
     foreach ($services as $s) {
       $this->check_service_result((int) $s->id, $cid);
@@ -137,7 +137,7 @@ class Health extends Trongate
 
   function check_service_result(int $id, int $customer_id): ?array
   {
-    $this->module('environment-services');
+    $this->module('deployment-environment-services');
     $s = $this->services->model->get($id, $customer_id);
     if ($s === false) return null;
 
@@ -169,7 +169,7 @@ class Health extends Trongate
       return ['status' => 'unknown', 'message' => 'SSH key not configured', 'ms' => null];
     }
 
-    $this->module('server');
+    $this->module('deployment-server');
     $servers = $this->server->model->by_environment($env_id, $customer_id);
     if (empty($servers)) {
       return ['status' => 'unknown', 'message' => 'No server for environment', 'ms' => null];

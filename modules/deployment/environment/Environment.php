@@ -1,6 +1,6 @@
 <?php
 
-require_once __DIR__ . '/../deployment/event/Emits_events.php';
+require_once __DIR__ . '/../event/Emits_events.php';
 
 class Environment extends Trongate {
 
@@ -12,7 +12,7 @@ class Environment extends Trongate {
         $this->_require_auth();
 
         $data = [
-            'view_module'   => 'environment',
+            'view_module'   => 'deployment/environment',
             'view_file'     => 'index',
             'page_title'    => 'Environments',
             'environments'  => $this->model->all(),
@@ -43,7 +43,7 @@ class Environment extends Trongate {
                     redirect('environment/create');
                     return;
                 }
-                $this->module('environment-services');
+                $this->module('deployment-environment-services');
                 $this->services->model->create_defaults_for_environment(
                     (int) $env_id,
                     (array) ($_POST['services'] ?? []),
@@ -60,7 +60,7 @@ class Environment extends Trongate {
         }
 
         $data = [
-            'view_module'   => 'environment',
+            'view_module'   => 'deployment/environment',
             'view_file'     => 'create',
             'page_title'    => 'New Environment',
             'form_location' => 'environment/create',
@@ -77,15 +77,15 @@ class Environment extends Trongate {
         $env = $this->model->get($id);
         if ($env === false) { redirect('environment'); }
 
-        $this->module('server');
+        $this->module('deployment-server');
         $servers = $this->server->model->by_environment($id);
 
-        $this->module('environment-services');
+        $this->module('deployment-environment-services');
         $services      = $this->services->model->by_environment($id);
         $type_defaults = $this->services->model->get_type_defaults();
 
         $data = [
-            'view_module'   => 'environment',
+            'view_module'   => 'deployment/environment',
             'view_file'     => 'show',
             'page_title'    => htmlspecialchars($env->name),
             'env'           => $env,
@@ -105,7 +105,7 @@ class Environment extends Trongate {
         if ($env === false) { redirect('environment'); }
 
         $data = [
-            'view_module'   => 'environment',
+            'view_module'   => 'deployment/environment',
             'view_file'     => 'variables',
             'page_title'    => htmlspecialchars($env->name) . ' — Variables',
             'env'           => $env,

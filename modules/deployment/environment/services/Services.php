@@ -1,6 +1,6 @@
 <?php
 
-require_once __DIR__ . '/../../deployment/event/Emits_events.php';
+require_once __DIR__ . '/../../event/Emits_events.php';
 require_once __DIR__ . '/../../server/health/Health_model.php';
 
 class Services extends Trongate
@@ -15,7 +15,7 @@ class Services extends Trongate
     $this->_require_auth();
 
     $data = [
-      'view_module'   => 'environment/services',
+      'view_module'   => 'deployment/environment/services',
       'view_file'     => 'index',
       'page_title'    => 'Services',
       'services'      => $this->model->all(),
@@ -39,7 +39,7 @@ class Services extends Trongate
 
       if ($this->validation->run() === true) {
         $environment_id = (int) post('environment_id');
-        $this->module('environment');
+        $this->module('deployment-environment');
         if ($this->environment->model->get($environment_id) === false) {
           $_SESSION['flash_error'] = 'Invalid environment.';
         } else {
@@ -69,7 +69,7 @@ class Services extends Trongate
     $preselected = (int) ($_GET['environment'] ?? 0);
 
     $data = [
-      'view_module'   => 'environment/services',
+      'view_module'   => 'deployment/environment/services',
       'view_file'     => 'create',
       'page_title'    => 'New Service',
       'form_location' => 'environment-services/create',
@@ -96,7 +96,7 @@ class Services extends Trongate
     $latest  = $health_model->latest('service', $id);
 
     $data = [
-      'view_module'   => 'environment/services',
+      'view_module'   => 'deployment/environment/services',
       'view_file'     => 'show',
       'page_title'    => htmlspecialchars($service->name),
       'service'       => $service,

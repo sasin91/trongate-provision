@@ -118,7 +118,7 @@ class Onboarding extends Trongate
       'PROVISION_OUR_EMAIL'    => post('cfg_our_email', true),
     ], fn($v) => $v !== '' && $v !== null);
 
-    $this->module('environment');
+    $this->module('deployment-environment');
     $env_id = $this->environment->model->create_with_defaults(
       post('name', true),
       post('php_version', true),
@@ -131,7 +131,7 @@ class Onboarding extends Trongate
       return;
     }
 
-    $this->module('environment-services');
+    $this->module('deployment-environment-services');
     $this->services->model->create_defaults_for_environment(
       (int) $env_id,
       (array) ($_POST['services'] ?? []),
@@ -431,7 +431,7 @@ class Onboarding extends Trongate
       $regions      = $h->list_regions();
       $server_types = $h->list_server_types();
       $all_servers  = $h->list_servers();
-      $this->module('server');
+      $this->module('deployment-server');
       $tracked    = $this->server->model->tracked_hetzner_ids();
       $importable = array_values(array_filter($all_servers, fn($s) => !in_array($s['id'], $tracked)));
     } catch (Throwable $e) {
@@ -910,7 +910,7 @@ class Onboarding extends Trongate
       $server_id = (int) $server->id;
       $this->_remember_onboarding_server($customer, $server_id);
     }
-    $this->module('server');
+    $this->module('deployment-server');
 
     return $this->server->model->get($server_id);
   }
@@ -970,7 +970,7 @@ class Onboarding extends Trongate
     return (string) $this->view(
       'scripts/certbot_script',
       [
-        'view_module' => 'server',
+        'view_module' => 'deployment/server',
         'server' => $server,
       ],
       true,
