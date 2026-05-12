@@ -18,7 +18,7 @@ class Secrets extends Trongate {
             return [];
         }
 
-        $this->module('encryption');
+        $this->module('deployment-encryption');
         $decrypted = $this->encryption->decrypt($row->variables, $data_key);
         if ($decrypted === false) return [];
 
@@ -26,7 +26,7 @@ class Secrets extends Trongate {
     }
 
     function save(string $module, int $module_id, ?string $service, array $variables): void {
-        $this->module('encryption');
+        $this->module('deployment-encryption');
         $data_key     = Encryption::generate_key();
         $encrypted    = $this->encryption->encrypt(json_encode($variables), $data_key);
         $wrapped_key  = $this->_wrap_key($data_key);

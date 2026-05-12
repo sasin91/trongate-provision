@@ -9,7 +9,7 @@ class Provider extends Trongate {
         $hetzner     = $has_hetzner ? $this->model->get_hetzner((int) $customer->id) : [];
 
         $data = [
-            'view_module'  => 'provider',
+            'view_module' => 'deployment/provider',
             'view_file'    => 'index',
             'page_title'   => 'Providers',
             'current_email'=> $customer->email,
@@ -25,7 +25,7 @@ class Provider extends Trongate {
         $customer = $this->_require_customer();
 
         $data = [
-            'view_module'   => 'provider',
+            'view_module' => 'deployment/provider',
             'view_file'     => 'connect',
             'page_title'    => 'Connect Hetzner Cloud',
             'current_email' => $customer->email,

@@ -1,6 +1,6 @@
 <?php
 
-require_once __DIR__ . "/../event/Emits_events.php";
+require_once __DIR__ . "/../deployment/event/Emits_events.php";
 
 class Server extends Trongate
 {
@@ -41,7 +41,7 @@ class Server extends Trongate
     $preselected_env = (int) ($_GET["env"] ?? 0);
     $customer_id = $this->_get_current_customer_id();
 
-    $this->module("provider");
+    $this->module("deployment-provider");
     $has_hetzner = $this->provider->model->has_hetzner($customer_id);
     $hetzner_regions = [];
     $hetzner_types = [];
@@ -136,7 +136,7 @@ class Server extends Trongate
 
     $customer_id = $this->_get_current_customer_id();
 
-    $this->module("provider");
+    $this->module("deployment-provider");
     if (!$this->provider->model->has_hetzner($customer_id)) {
       $_SESSION["flash_error"] = "Hetzner not connected.";
       return false;
@@ -222,7 +222,7 @@ class Server extends Trongate
 
     $customer_id = $this->_get_current_customer_id();
 
-    $this->module("provider");
+    $this->module("deployment-provider");
     if (!$this->provider->model->has_hetzner($customer_id)) {
       $_SESSION["flash_error"] = "Hetzner not connected.";
       return false;
@@ -419,7 +419,7 @@ class Server extends Trongate
   function stream(): void
   {
     $id = (int) segment(3);
-    $this->module("stream");
+    $this->module("deployment-stream");
     $this->stream->start();
     $emit = function (string $line, string $event = ""): void {
       $this->stream->emit($line, $event);
@@ -546,7 +546,7 @@ class Server extends Trongate
     $retry_delay = 15;
     $exit_code = 255;
 
-    $this->module("ssh");
+    $this->module("deployment-ssh");
 
     for ($attempt = 1; $attempt <= $max_ssh_attempts; $attempt++) {
       if ($attempt === 1) {
@@ -848,7 +848,7 @@ class Server extends Trongate
     $user = $server->ssh_user ?: "root";
     $port = (int) ($server->ssh_port ?: 22);
 
-    $this->module("ssh");
+    $this->module("deployment-ssh");
     $log = "";
     $exit_code = $this->ssh->execute_script(
       $server->ip_address,
@@ -953,7 +953,7 @@ class Server extends Trongate
 
   private function _hetzner_client(int $customer_id): Hetzner
   {
-    $this->module("provider");
+    $this->module("deployment-provider");
     $creds = $this->provider->model->get_hetzner($customer_id);
     if (empty($creds["token"])) {
       throw new RuntimeException("Hetzner token not configured.");

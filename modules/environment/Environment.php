@@ -1,6 +1,6 @@
 <?php
 
-require_once __DIR__ . '/../event/Emits_events.php';
+require_once __DIR__ . '/../deployment/event/Emits_events.php';
 
 class Environment extends Trongate {
 

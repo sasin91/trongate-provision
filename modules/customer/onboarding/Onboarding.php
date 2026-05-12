@@ -40,7 +40,7 @@ class Onboarding extends Trongate
         redirect('customer-onboarding/server_manual');
       }
 
-      $this->module('provider');
+      $this->module('deployment-provider');
       if (!$this->provider->model->has_hetzner((int) $customer->id)) {
         redirect('customer-onboarding/server_hetzner');
       }
@@ -366,7 +366,7 @@ class Onboarding extends Trongate
         $ssh_key_ids[] = $customer_key['id'];
       }
 
-      $this->module('provider');
+      $this->module('deployment-provider');
       $this->provider->model->save_hetzner((int) $customer->id, $token, $key_id, $label, $ssh_key_ids);
 
       redirect('customer-onboarding/configure_hetzner_server');
@@ -378,7 +378,7 @@ class Onboarding extends Trongate
 
   function _show_server_hetzner(object $customer): void
   {
-    $this->module('provider');
+    $this->module('deployment-provider');
     $creds = $this->provider->model->get_hetzner((int) $customer->id);
 
     $this->_render_wizard_view('server_hetzner', [
@@ -399,7 +399,7 @@ class Onboarding extends Trongate
       redirect('customer-onboarding/environment');
     }
 
-    $this->module('provider');
+    $this->module('deployment-provider');
     if (!$this->provider->model->has_hetzner((int) $customer->id)) {
       redirect('customer-onboarding/server_hetzner');
     }
@@ -456,7 +456,7 @@ class Onboarding extends Trongate
     if ($this->validation->run() !== true) return null;
 
     $h      = $this->_hetzner_client((int) $customer->id);
-    $this->module('provider');
+    $this->module('deployment-provider');
     $creds  = $this->provider->model->get_hetzner((int) $customer->id);
     $name   = post('name', true);
     $region = post('region', true);
@@ -530,7 +530,7 @@ class Onboarding extends Trongate
 
   function _hetzner_client(int $customer_id): Hetzner
   {
-    $this->module('provider');
+    $this->module('deployment-provider');
     $creds = $this->provider->model->get_hetzner($customer_id);
     if (empty($creds['token'])) {
       throw new RuntimeException('Hetzner token not configured.');
@@ -674,7 +674,7 @@ class Onboarding extends Trongate
 
   function ssl_stream(): void
   {
-    $this->module('stream');
+    $this->module('deployment-stream');
     $this->stream->start();
     $emit = function (string $line, string $event = ''): void {
       $this->stream->emit($line, $event);
@@ -770,7 +770,7 @@ class Onboarding extends Trongate
     $this->model->mark_onboarded((int) $customer->id);
     unset($_SESSION['onboarding_ssl_retryable_failure']);
 
-    $this->module('http');
+    $this->module('deployment-http');
     $this->http->json_response(['ok' => true]);
   }
 
@@ -854,7 +854,7 @@ class Onboarding extends Trongate
     if ($hash === false) {
       return false;
     }
-    $this->module('storage');
+    $this->module('deployment-storage');
     $dir = $this->storage->ensure_dir('deploy_zips');
     if ($dir === false) {
       return false;
@@ -868,7 +868,7 @@ class Onboarding extends Trongate
 
   private function _prune_zip_storage(): void
   {
-    $this->module('storage');
+    $this->module('deployment-storage');
     if (!is_dir($this->storage->path('deploy_zips'))) {
       return;
     }
@@ -982,7 +982,7 @@ class Onboarding extends Trongate
     $user = $server->ssh_user ?: 'root';
     $port = (int) ($server->ssh_port ?: 22);
 
-    $this->module('ssh');
+    $this->module('deployment-ssh');
     $log = '';
     $exit_code = $this->ssh->execute_script(
       $server->ip_address,
@@ -1004,7 +1004,7 @@ class Onboarding extends Trongate
     $user = $server->ssh_user ?: 'root';
     $port = (int) ($server->ssh_port ?: 22);
 
-    $this->module('ssh');
+    $this->module('deployment-ssh');
     $log = '';
     $exit_code = $this->ssh->execute_script(
       $server->ip_address,

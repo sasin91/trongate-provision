@@ -13,7 +13,7 @@ class Event extends Trongate {
         $events = $this->model->for_entity('deployment', $id, (int) $customer->id);
 
         $data = [
-            'view_module'   => 'event',
+            'view_module'   => 'deployment/event',
             'view_file'     => 'deployment',
             'page_title'    => 'Timeline — Deployment #' . $id,
             'current_email' => $customer->email,
@@ -34,7 +34,7 @@ class Event extends Trongate {
         $events = $this->model->for_customer((int) $customer->id, 100, $filter);
 
         $data = [
-            'view_module'   => 'event',
+            'view_module'   => 'deployment/event',
             'view_file'     => 'feed',
             'page_title'    => 'Activity Feed',
             'current_email' => $customer->email,

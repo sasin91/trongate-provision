@@ -305,7 +305,7 @@
         <a href="event/timeline_for_deployment/<?= $deployment->id ?>" class="btn btn-secondary btn-sm">View all</a>
     </div>
     <div class="card-body" style="padding:0 1.25rem">
-        <?php $events = $recent_events; include APPPATH . 'modules/event/views/timeline.php'; ?>
+        <?php $events = $recent_events; include APPPATH . 'modules/deployment/event/views/timeline.php'; ?>
     </div>
 </div>
 <?php endif; ?>

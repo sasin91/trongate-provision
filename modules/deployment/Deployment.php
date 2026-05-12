@@ -1,6 +1,6 @@
 <?php
 
-require_once __DIR__ . "/../event/Emits_events.php";
+require_once __DIR__ . "/event/Emits_events.php";
 
 class Deployment extends Trongate
 {
@@ -164,7 +164,7 @@ class Deployment extends Trongate
     $this->module("server-health");
     $latest_health = $this->health->model->latest("deployment", $id);
 
-    $this->module("event");
+    $this->module("deployment-event");
     // TODO: remove after event/health modules are migrated off customer_id (Task 3)
     $recent_events = $this->event->model->recent_for_entity(
       "deployment",
@@ -192,9 +192,9 @@ class Deployment extends Trongate
   function stream(): void
   {
     $id = (int) segment(3);
-    $this->module("stream");
+    $this->module("deployment-stream");
     $this->stream->start();
-    $this->module("ssh");
+    $this->module("deployment-ssh");
     $emit = function (string $line, string $event = ""): void {
       $this->stream->emit($line, $event);
     };
@@ -502,7 +502,7 @@ class Deployment extends Trongate
     $id = (int) segment(3);
     $this->_require_auth();
     $d = $this->model->get($id);
-    $this->module('http');
+    $this->module('deployment-http');
     if ($d === false || $d->status !== "staged" || empty($d->release_path)) {
       $this->http->json_response(["ok" => false, "message" => "Only staged releases can be scanned for SQL files."], 422);
       return;
@@ -543,7 +543,7 @@ class Deployment extends Trongate
     $id = (int) segment(3);
     $this->_require_auth();
     $d = $this->model->get($id);
-    $this->module('http');
+    $this->module('deployment-http');
     if ($d === false || $d->status !== "staged" || empty($d->release_path)) {
       $this->http->json_response(["ok" => false, "message" => "Only staged releases can have SQL files deleted."], 422);
       return;
@@ -602,7 +602,7 @@ class Deployment extends Trongate
     $id = (int) segment(3);
     $this->_require_auth();
     $result = $this->_promote_release_result($id);
-    $this->module('http');
+    $this->module('deployment-http');
     $this->http->json_response($result, $result["ok"] ? 200 : 422);
   }
 
@@ -835,7 +835,7 @@ class Deployment extends Trongate
       return ["exit_code" => 1, "log" => "Invalid SSH user."];
     }
 
-    $this->module("ssh");
+    $this->module("deployment-ssh");
     $log = '';
     $exit_code = $this->ssh->execute_script(
       $d->ip_address,
@@ -1005,7 +1005,7 @@ class Deployment extends Trongate
       $error = "Zip upload failed: could not read the uploaded temporary file.";
       return false;
     }
-    $this->module("storage");
+    $this->module("deployment-storage");
     $dir = $this->storage->ensure_dir("deploy_zips");
     if ($dir === false) {
       $error = "Zip upload failed: could not create the deploy_zips storage directory.";
@@ -1035,7 +1035,7 @@ class Deployment extends Trongate
 
   private function _prune_zip_storage(): void
   {
-    $this->module("storage");
+    $this->module("deployment-storage");
     if (!is_dir($this->storage->path("deploy_zips"))) {
       return;
     }
@@ -1084,9 +1084,10 @@ class Deployment extends Trongate
       return false;
     }
 
-    $this->module('http-client');
+    require_once __DIR__ . '/http/client/Client.php';
+    $client = new Client();
     try {
-      $result = $this->client->fetch($archive_url);
+      $result = $client->fetch($archive_url);
     } catch (Client_Error $e) {
       return false;
     }
@@ -1099,7 +1100,7 @@ class Deployment extends Trongate
     }
     $data = $result['body'];
 
-    $this->module("storage");
+    $this->module("deployment-storage");
     return $this->storage->put('deploy_zips/provision_deploy_' . hash('sha256', $data) . '.zip', $data);
   }
 
