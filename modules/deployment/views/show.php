@@ -159,40 +159,9 @@
 
 <div class="card">
     <div class="card-header">
-        <span class="card-title">Deploy Script</span>
-        <?php if (!empty($deployment->script_name)): ?>
-            <span style="font-size:.78rem;color:#64748b">Using <?= htmlspecialchars($deployment->script_name) ?></span>
-        <?php else: ?>
-            <span style="font-size:.78rem;color:#64748b">Using default generated script</span>
-        <?php endif; ?>
-    </div>
-    <div class="card-body">
-        <?= form_open('deployment/assign_script/' . $deployment->id, ['class' => 'script-select-form']) ?>
-            <div class="form-group" style="margin:0">
-                <label class="form-label" for="script-id">Custom script</label>
-                <select name="script_id" id="script-id" class="form-control">
-                    <option value="0">Default generated deploy script</option>
-                    <?php foreach (($deploy_scripts ?? []) as $script): ?>
-                        <option value="<?= (int) $script->id ?>" <?= (int) ($deployment->script_id ?? 0) === (int) $script->id ? 'selected' : '' ?>>
-                            <?= htmlspecialchars($script->name) ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-                <span class="form-hint">Custom deploy scripts can use deployment placeholders and any environment variable as <code>{{VARIABLE_NAME}}</code>. Echo <code>RELEASE_PATH: {{RELEASE_PATH}}</code> and <code>SHA: ...</code> so Provision can track the staged release.</span>
-            </div>
-            <div class="actions-row">
-                <button type="submit" class="btn btn-primary btn-sm">Save Script Choice</button>
-                <a href="script/create?type=deploy" class="btn btn-secondary btn-sm">New Script</a>
-            </div>
-        <?= form_close() ?>
-    </div>
-</div>
-
-<div class="card">
-    <div class="card-header">
         <div>
             <span class="card-title">Deployment Script Preview</span>
-            <span style="margin-left:.6rem;font-size:.78rem;color:#94a3b8"><?= !empty($deployment->script_name) ? 'custom staged release script' : 'generated staged release script' ?></span>
+            <span style="margin-left:.6rem;font-size:.78rem;color:#94a3b8">generated staged release script</span>
         </div>
         <div class="actions-row">
             <button onclick="copyScript('deploy-script')" class="btn btn-secondary btn-sm">Copy</button>

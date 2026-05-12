@@ -53,7 +53,6 @@ CREATE TABLE IF NOT EXISTS deployment (
     server_id INT UNSIGNED NOT NULL,
     environment_id INT UNSIGNED NOT NULL,
     customer_id INT UNSIGNED NOT NULL,
-    script_id INT UNSIGNED DEFAULT NULL,
     source_type ENUM('git','zip') NOT NULL DEFAULT 'git',
     repo_url VARCHAR(500) DEFAULT NULL,
     branch VARCHAR(100) DEFAULT 'main',
@@ -93,19 +92,6 @@ CREATE TABLE IF NOT EXISTS secrets (
     variables TEXT NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY uniq_secret (module, module_id, service)
-);
-
-CREATE TABLE IF NOT EXISTS script (
-    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    customer_id INT UNSIGNED NOT NULL,
-    server_id INT UNSIGNED DEFAULT NULL,
-    name VARCHAR(150) NOT NULL,
-    description VARCHAR(500) DEFAULT NULL,
-    type ENUM('lamp','deploy') NOT NULL DEFAULT 'deploy',
-    body LONGTEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    KEY idx_server_id (server_id)
 );
 
 CREATE TABLE IF NOT EXISTS health_check (

@@ -12,10 +12,6 @@ if (!function_exists('wizard_step_dots')) {
 $has_deployment = !empty($deployment) && $deployment !== false;
 $status = $has_deployment ? (string) $deployment->status : "new";
 $deployment_id = $has_deployment ? (int) $deployment->id : 0;
-$selected_script_body = !empty($preselected_script) && $preselected_script !== false
-  ? (string) $preselected_script->body
-  : '';
-$editor_body = (string) (post('deploy_script_body') ?: $selected_script_body);
 $wizard_urls = $has_deployment ? [
   "stream" => BASE_URL . "deployment/stream/" . $deployment_id,
   "scan_sql" => BASE_URL . "deployment/scan_release_sql/" . $deployment_id,
@@ -147,44 +143,6 @@ if ($status === "success") {
             <label class="form-label">App zip file</label>
             <input type="file" name="zip_file" accept=".zip" class="form-input">
             <span class="form-hint">Upload a .zip of your application root.</span>
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label" for="custom-script-id">Custom deploy script</label>
-          <select name="custom_script_id" id="custom-script-id" class="form-select">
-            <option value="">Default generated script</option>
-            <?php foreach (($deploy_scripts ?? []) as $deploy_script): ?>
-              <option
-                value="<?= (int) $deploy_script->id ?>"
-                data-template-id="deploy-script-template-<?= (int) $deploy_script->id ?>"
-                <?= !empty($preselected_script) && $preselected_script !== false && (int) $preselected_script->id === (int) $deploy_script->id ? 'selected' : '' ?>>
-                <?= htmlspecialchars($deploy_script->name) ?>
-              </option>
-            <?php endforeach; ?>
-          </select>
-          <?php foreach (($deploy_scripts ?? []) as $deploy_script): ?>
-            <template id="deploy-script-template-<?= (int) $deploy_script->id ?>"><?= htmlspecialchars((string) $deploy_script->body) ?></template>
-          <?php endforeach; ?>
-          <span class="form-hint">Choose an existing deploy script or edit the generated script below.</span>
-        </div>
-
-        <div class="script-editor-panel">
-          <div class="script-editor-header">
-            <div>
-              <label class="form-label" for="deploy-script-body">Deploy script</label>
-              <span class="form-hint">Edit this script to save it as a custom deploy script and use it for this deployment.</span>
-            </div>
-          </div>
-          <textarea
-            name="deploy_script_body"
-            id="deploy-script-body"
-            class="script-editor-textarea"
-            data-template-url="deployment_module/assets/deploy_script_template.txt"
-            rows="26"
-            spellcheck="false"><?= htmlspecialchars($editor_body) ?></textarea>
-          <div class="script-editor-note">
-            Keep the <code>RELEASE_PATH:</code> and <code>SHA:</code> output lines so Provision can track staged releases.
           </div>
         </div>
 

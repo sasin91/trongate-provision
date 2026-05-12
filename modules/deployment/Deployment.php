@@ -95,69 +95,24 @@ class Deployment extends Trongate
             ) ?: null;
           }
 
-          $selected_script = false;
-          $selected_script_id = (int) post("custom_script_id");
-          if ($selected_script_id > 0) {
-            $this->module("script");
-            $selected_script = $this->script->model->get($selected_script_id, (int) $customer->id);
-            if ($selected_script === false || $selected_script->type !== "deploy") {
-              $selected_script = false;
-              $selected_script_id = 0;
-            }
-          }
-
           $id = $this->model->create([
-            "server_id" => $server_id,
+            "server_id"      => $server_id,
             "environment_id" => $environment_id,
-            "customer_id" => (int) $customer->id,
-            "script_id" => $selected_script !== false ? $selected_script_id : null,
-            "source_type" => $source_type,
-            "repo_url" =>
-              $source_type === "git" ? post("repo_url", true) : null,
-            "branch" => $source_type === "git" ? post("branch", true) : null,
-            "zip_path" => $zip_path,
-            "status" => "script_ready",
+            "customer_id"    => (int) $customer->id,
+            "source_type"    => $source_type,
+            "repo_url"       => $source_type === "git" ? post("repo_url", true) : null,
+            "branch"         => $source_type === "git" ? post("branch", true) : null,
+            "zip_path"       => $zip_path,
+            "status"         => "script_ready",
           ]);
-
-          $custom_script_id = $selected_script !== false ? $selected_script_id : null;
-          $default_script = $this->_default_deploy_script_template();
-          $base_script = $selected_script !== false ? (string) $selected_script->body : $default_script;
-          $submitted_script = (string) (post("deploy_script_body") ?: "");
-          if (
-            trim($submitted_script) !== "" &&
-            $this->_normalize_script_body($submitted_script) !== $this->_normalize_script_body($base_script)
-          ) {
-            $this->module("script");
-            $custom_script_id = $this->script->model->create([
-              "customer_id" => (int) $customer->id,
-              "name" => "Deployment {$id} custom deploy script",
-              "description" => "Created from deployment wizard edits.",
-              "type" => "deploy",
-              "body" => $submitted_script,
-            ]);
-
-            if ($custom_script_id !== false) {
-              $this->model->assign_script((int) $id, (int) $customer->id, (int) $custom_script_id);
-              $this->_emit("ScriptCreated", "script", (int) $custom_script_id, [
-                "name" => "Deployment {$id} custom deploy script",
-                "type" => "deploy",
-              ]);
-              $this->_emit("DeploymentScriptChanged", "deployment", (int) $id, [
-                "script_id" => (int) $custom_script_id,
-              ]);
-            }
-          }
 
           $this->_emit("DeploymentCreated", "deployment", (int) $id, [
-            "server_id" => $server_id,
+            "server_id"      => $server_id,
             "environment_id" => $environment_id,
-            "source_type" => $source_type,
-            "status" => "script_ready",
+            "source_type"    => $source_type,
+            "status"         => "script_ready",
           ]);
-          $_SESSION["flash_success"] =
-            $custom_script_id
-              ? "Deployment created with custom deploy script. Staging will start automatically."
-              : "Deployment created. Staging will start automatically.";
+          $_SESSION["flash_success"] = "Deployment created. Staging will start automatically.";
           redirect("deployment/create/" . $id);
           return;
         }
@@ -178,17 +133,6 @@ class Deployment extends Trongate
 
     $preselected_server = (int) ($_GET["server"] ?? 0);
     $preselected_env = (int) ($_GET["env"] ?? 0);
-    $this->module("script");
-    $deploy_scripts = $this->script->model->by_type((int) $customer->id, "deploy");
-
-    $preselected_script = false;
-    $preselected_script_id = (int) (post("custom_script_id") ?: ($_GET["script"] ?? 0));
-    if ($preselected_script_id > 0) {
-      $preselected_script = $this->script->model->get($preselected_script_id, (int) $customer->id);
-      if ($preselected_script === false || $preselected_script->type !== "deploy") {
-        $preselected_script = false;
-      }
-    }
 
     $data = [
       "view_module" => "deployment",
@@ -203,8 +147,6 @@ class Deployment extends Trongate
       "deployment" => $wizard_deployment,
       "preselected_server" => $preselected_server,
       "preselected_env" => $preselected_env,
-      "preselected_script" => $preselected_script,
-      "deploy_scripts" => $deploy_scripts,
     ];
 
     $this->view("create", $data);
@@ -238,9 +180,6 @@ class Deployment extends Trongate
       5,
     );
 
-    $this->module("script");
-    $deploy_scripts = $this->script->model->by_type((int) $customer->id, "deploy");
-
     $data = [
       "view_module" => "deployment",
       "view_file" => "show",
@@ -248,7 +187,6 @@ class Deployment extends Trongate
       "current_email" => $customer->email,
       "deployment" => $deployment,
       "deploy_script" => $display_script,
-      "deploy_scripts" => $deploy_scripts,
       "services" => $services,
       "latest_health" => $latest_health,
       "recent_events" => $recent_events,
@@ -472,44 +410,6 @@ class Deployment extends Trongate
     $this->model->mark_stale_running_failed($id, $customer_id, $message);
     $emit($message);
     $this->stream->done(["status" => "failed", "sha" => null]);
-  }
-
-  function assign_script(): void
-  {
-    $id = (int) segment(3);
-    $customer = $this->_require_customer();
-    $d = $this->model->get($id, (int) $customer->id);
-    if ($d === false) {
-      redirect("deployment");
-    }
-
-    $this->validation->set_rules("dummy", "dummy", "max_length[1]");
-    if ($this->validation->run() !== true) {
-      redirect("deployment/show/" . $id);
-      return;
-    }
-
-    $script_id_raw = (int) post("script_id");
-    if ($script_id_raw > 0) {
-      $this->module("script");
-      $script = $this->script->model->get($script_id_raw, (int) $customer->id);
-      if ($script === false || $script->type !== "deploy") {
-        $script_id_raw = 0;
-      }
-    }
-    $this->model->assign_script(
-      $id,
-      (int) $customer->id,
-      $script_id_raw > 0 ? $script_id_raw : null,
-    );
-    $this->_emit("DeploymentScriptChanged", "deployment", $id, [
-      "script_id" => $script_id_raw > 0 ? $script_id_raw : null,
-    ]);
-    $_SESSION["flash_success"] =
-      $script_id_raw > 0
-        ? "Custom script assigned."
-        : "Reverted to default generated script.";
-    redirect("deployment/show/" . $id);
   }
 
   function reupload_zip(): void
@@ -834,14 +734,6 @@ class Deployment extends Trongate
         $this->environment->model->decrypt_blob($d->env_variables_enc) ?: [];
     }
 
-    if (($d->script_type ?? "") === "deploy" && trim((string) ($d->script_body ?? "")) !== "") {
-      $this->module("script");
-      return $this->script->model->interpolate(
-        (string) $d->script_body,
-        $this->_deploy_script_vars($d, $env_vars),
-      );
-    }
-
     return (string) $this->view(
       "scripts/deploy_script",
       [
@@ -922,17 +814,6 @@ class Deployment extends Trongate
       ],
       true,
     );
-  }
-
-  private function _default_deploy_script_template(): string
-  {
-    $path = __DIR__ . "/assets/deploy_script_template.txt";
-    return is_file($path) ? (string) file_get_contents($path) : "";
-  }
-
-  private function _normalize_script_body(string $script): string
-  {
-    return trim(str_replace(["\r\n", "\r"], "\n", $script));
   }
 
   private function _render_release_script(string $script, object $d): string

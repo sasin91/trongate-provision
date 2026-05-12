@@ -5,12 +5,10 @@ class Deployment_model extends Model {
     function all(int $customer_id): array {
         return $this->db->query_bind(
             "SELECT d.*, s.name as server_name, s.ip_address,
-                    e.name as env_name, e.domain,
-                    sc.name as script_name
+                    e.name as env_name, e.domain
              FROM deployment d
              JOIN server s ON d.server_id = s.id
              JOIN environment e ON d.environment_id = e.id
-             LEFT JOIN script sc ON d.script_id = sc.id
              WHERE d.customer_id = :cid
              ORDER BY d.created_at DESC",
             ['cid' => $customer_id],
@@ -40,12 +38,10 @@ class Deployment_model extends Model {
             "SELECT d.*, s.name as server_name, s.ip_address, s.ssh_user, s.ssh_port,
                     e.name as env_name, e.id as env_id, e.php_version,
                     e.web_root, e.domain, e.db_name,
-                    e.variables as env_variables_enc,
-                    sc.name as script_name, sc.body as script_body, sc.type as script_type
+                    e.variables as env_variables_enc
              FROM deployment d
              JOIN server s ON d.server_id = s.id
              JOIN environment e ON d.environment_id = e.id
-             LEFT JOIN script sc ON d.script_id = sc.id
              WHERE d.id = :id AND d.customer_id = :cid LIMIT 1",
             ['id' => $id, 'cid' => $customer_id],
             'object'
@@ -84,10 +80,6 @@ class Deployment_model extends Model {
              WHERE id=:id AND customer_id=:cid AND status='running'",
             ['id' => $id, 'cid' => $customer_id, 'log' => $message]
         );
-    }
-
-    function assign_script(int $id, int $customer_id, ?int $script_id): void {
-        $this->db->update($id, ['script_id' => $script_id], 'deployment');
     }
 
     function promote_release(int $id, int $customer_id, ?string $previous_release_path): void {
