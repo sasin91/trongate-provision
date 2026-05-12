@@ -8,7 +8,7 @@
     <div class="card-body" style="padding:.6rem 1.25rem;display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
         <span style="font-size:.8rem;color:#64748b">Filter:</span>
         <?php
-        $filters = ['' => 'All', 'deployment' => 'Deployments', 'server' => 'Servers', 'service' => 'Services', 'environment' => 'Environments', 'script' => 'Scripts', 'customer' => 'Auth'];
+        $filters = ['' => 'All', 'deployment' => 'Deployments', 'server' => 'Servers', 'service' => 'Services', 'environment' => 'Environments', 'customer' => 'Auth'];
         foreach ($filters as $val => $label):
             $active = $active_filter === $val;
         ?>

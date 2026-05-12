@@ -209,4 +209,3 @@
 </div>
 
 <script src="server_module/js/show.js"></script>
-<script src="server_module/js/script-editor.js"></script>
